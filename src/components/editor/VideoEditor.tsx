@@ -827,12 +827,21 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
         <div className="flex-1 flex flex-col bg-black relative overflow-hidden min-w-0" onClick={leftTool === 'cut' ? handleCut : undefined} style={{ cursor: leftTool === 'cut' ? 'crosshair' : leftTool === 'crop' ? 'nwse-resize' : 'default' }}>
           <div className="flex-1 relative overflow-hidden min-h-0">
             {previewClip?.src ? (
-              previewClip.type === 'image'
-              ? <img key={previewClip.id} src={previewClip.src} className="w-full h-full object-contain" style={{ filter: videoFilter }} alt={previewClip.label} />
-              : <video key={previewClip.id} ref={videoRef} src={previewClip.src} className="w-full h-full object-contain" style={{ filter: videoFilter }} onTimeUpdate={handleTimeUpdate} onEnded={() => setIsPlaying(false)} muted={isMuted} />
+              <motion.div
+                key={playingTransition ? `tr-${playingTransition.key}` : 'media'}
+                className="absolute inset-0"
+                initial={playingTransition ? (TRANSITION_ANIM[playingTransition.id] ?? TRANSITION_ANIM.fade).initial : false}
+                animate={playingTransition ? (TRANSITION_ANIM[playingTransition.id] ?? TRANSITION_ANIM.fade).animate : { opacity: 1 }}
+                transition={{ duration: 0.7, ease: 'easeInOut' }}
+              >
+                {previewClip.type === 'image'
+                  ? <img key={previewClip.id} src={previewClip.src} className="w-full h-full object-contain" style={{ filter: videoFilter }} alt={previewClip.label} />
+                  : <video key={previewClip.id} ref={videoRef} src={previewClip.src} className="w-full h-full object-contain" style={{ filter: videoFilter }} onTimeUpdate={handleTimeUpdate} onEnded={() => setIsPlaying(false)} muted={isMuted} />}
+              </motion.div>
             ) : (
               <div className="w-full h-full flex items-center justify-center"><div className="text-center space-y-3 opacity-40"><Film className="w-20 h-20 mx-auto text-primary/40" /><p className="text-muted-foreground text-sm">Žiadne video nevybrané</p></div></div>
             )}
+
 
             <AnimatePresence>
               {appliedTools.has('captions') && (
