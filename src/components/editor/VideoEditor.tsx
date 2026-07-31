@@ -10,6 +10,7 @@ import {
   Headphones, FileMusic, Shuffle, SlidersHorizontal,
   Bot, MessageSquare,
 } from 'lucide-react';
+import { chatWithEditorAI } from '@/lib/ai.functions';
 
 interface VideoEditorProps {
   videoUrl: string | null;
