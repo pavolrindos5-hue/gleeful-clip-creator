@@ -26,7 +26,7 @@ type TimelineClip = {
   label: string;
   color: string;
   duration: number;
-  type: 'video' | 'image';
+  type?: 'video' | 'image';
   thumbUrl?: string;
   src?: string;
 };
@@ -633,7 +633,7 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
             </button>
             <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green-400 border-2 border-card animate-pulse" />
             <AnimatePresence>
-              {tooltipTool === 'ai-chat' && (
+              {(tooltipTool as string) === 'ai-chat' && (
                 <motion.div initial={{ opacity: 0, x: -4 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} className="absolute left-full ml-2 top-1/2 -translate-y-1/2 z-50 pointer-events-none">
                   <div className="bg-card border border-primary/20 rounded-lg px-2.5 py-1.5 shadow-xl whitespace-nowrap">
                     <p className="text-xs font-semibold text-foreground">AI Asistent</p>
