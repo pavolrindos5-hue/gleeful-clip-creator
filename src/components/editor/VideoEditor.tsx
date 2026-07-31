@@ -755,7 +755,7 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
                   {activePanel === 'ai' && (
                     <motion.div key="ai" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} className="space-y-2">
                       <div className="flex items-center gap-2 mb-3"><Sparkles className="w-4 h-4 text-primary" /><p className="text-xs font-bold text-foreground">AI Nástroje</p></div>
-                      <p className="text-[10px] text-muted-foreground -mt-2 mb-3 leading-relaxed">Klikni na nástroj — AI ho aplikuje automaticky. Alebo klikni na <Bot className="inline w-3 h-3 text-primary" /> v ľavom paneli a napíš AI priamo.</p>
+                      <p className="text-[10px] text-muted-foreground -mt-2 mb-3 leading-relaxed">Klikni na nástroj — AI ho aplikuje automaticky.</p>
                       {AI_TOOLS.map(({ id, label, icon: Icon, desc, detail }) => {
                         const isApplied = appliedTools.has(id); const isRunning = activeTool === id; const pct = toolProgress[id] ?? 0;
                         return (
