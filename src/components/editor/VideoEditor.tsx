@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, type TargetAndTransition } from 'framer-motion';
 import {
   Play, Pause, SkipBack, SkipForward, Volume2, VolumeX,
   Scissors, Wand2, Sparkles, Layers, Clock, Download,
@@ -10,6 +10,7 @@ import {
   Headphones, FileMusic, Shuffle, SlidersHorizontal,
   Bot, MessageSquare,
 } from 'lucide-react';
+import { chatWithEditorAI } from '@/lib/ai.functions';
 
 interface VideoEditorProps {
   videoUrl: string | null;
@@ -97,6 +98,39 @@ const INTRO_TEMPLATES = [
   { label: 'INTRO', color: 'from-rose-500 to-pink-600', overlay: { subtitle: 'Predstavuje', bg: 'from-black via-rose-500/30 to-black' } },
 ];
 
+// ── Živá ukážka prechodu (ako v PowerDirectore) ──
+const TRANSITION_ANIM: Record<string, { initial: TargetAndTransition; animate: TargetAndTransition }> = {
+  'fade':      { initial: { opacity: 0 },                          animate: { opacity: 1 } },
+  'wipe-l':    { initial: { clipPath: 'inset(0 0 0 100%)' },       animate: { clipPath: 'inset(0 0 0 0%)' } },
+  'wipe-r':    { initial: { clipPath: 'inset(0 100% 0 0)' },       animate: { clipPath: 'inset(0 0% 0 0)' } },
+  'zoom-in':   { initial: { scale: 0.3, opacity: 0 },              animate: { scale: 1, opacity: 1 } },
+  'zoom-out':  { initial: { scale: 1.8, opacity: 0 },              animate: { scale: 1, opacity: 1 } },
+  'slide-l':   { initial: { x: '100%' },                           animate: { x: '0%' } },
+  'slide-r':   { initial: { x: '-100%' },                          animate: { x: '0%' } },
+  'rotate':    { initial: { rotate: -120, scale: 0.4, opacity: 0 }, animate: { rotate: 0, scale: 1, opacity: 1 } },
+  'dissolve':  { initial: { opacity: 0, filter: 'blur(6px)' },     animate: { opacity: 1, filter: 'blur(0px)' } },
+  'flash':     { initial: { opacity: 0, filter: 'brightness(6)' }, animate: { opacity: 1, filter: 'brightness(1)' } },
+  'blur':      { initial: { opacity: 0, filter: 'blur(10px)' },    animate: { opacity: 1, filter: 'blur(0px)' } },
+  'glitch':    { initial: { opacity: 0, x: '12%', skewX: 18 },     animate: { opacity: 1, x: '0%', skewX: 0 } },
+};
+
+function TransitionPreview({ id }: { id: string }) {
+  const anim = TRANSITION_ANIM[id] ?? TRANSITION_ANIM.fade;
+  return (
+    <div className="relative w-full aspect-video rounded-md overflow-hidden bg-gradient-to-br from-violet-700 to-indigo-600">
+      <div className="absolute inset-0 flex items-center justify-center text-[8px] font-bold text-white/70">A</div>
+      <motion.div
+        className="absolute inset-0 bg-gradient-to-br from-fuchsia-500 to-amber-400 flex items-center justify-center text-[8px] font-bold text-black/60"
+        initial={anim.initial}
+        animate={anim.animate}
+        transition={{ duration: 0.9, ease: 'easeInOut', repeat: Infinity, repeatType: 'reverse', repeatDelay: 0.35 }}
+      >
+        B
+      </motion.div>
+    </div>
+  );
+}
+
 export default function VideoEditor({ videoUrl, videoName, isImage = false }: VideoEditorProps) {
   const [isPlaying, setIsPlaying]       = useState(false);
   const [isMuted, setIsMuted]           = useState(false);
@@ -105,7 +139,7 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
   const [activeTool, setActiveTool]    = useState<AITool>(null);
   const [toolProgress, setToolProgress] = useState<Record<string, number>>({});
   const [appliedTools, setAppliedTools] = useState<Set<string>>(new Set());
-  const [sliders, setSliders]          = useState({ jas: 65, kontrast: 50, sytost: 72 });
+  const [sliders, setSliders]          = useState({ jas: 50, kontrast: 50, sytost: 50 });
   const [timelineZoom, setTimelineZoom] = useState(1);
   const [leftTool, setLeftTool]         = useState<LeftTool>('select');
   const [subtitleIdx, setSubtitleIdx]   = useState(0);
@@ -401,11 +435,15 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
 
   const videoFilter = useMemo(() => {
     const filters: string[] = [];
+    // Manuálne posuvníky (50 = neutrálna hodnota)
+    if (sliders.jas !== 50)      filters.push(`brightness(${(sliders.jas / 50).toFixed(2)})`);
+    if (sliders.kontrast !== 50) filters.push(`contrast(${(sliders.kontrast / 50).toFixed(2)})`);
+    if (sliders.sytost !== 50)   filters.push(`saturate(${(sliders.sytost / 50).toFixed(2)})`);
     if (appliedTools.has('denoise'))    filters.push('contrast(1.08) saturate(1.12)');
     if (appliedTools.has('enhance'))    filters.push('brightness(1.05) contrast(1.06)');
     if (appliedTools.has('colorgrade')) filters.push('saturate(1.3) hue-rotate(5deg)');
     return filters.join(' ') || undefined;
-  }, [appliedTools]);
+  }, [appliedTools, sliders]);
 
   // ── AI Chat: parse user command and apply ──
   const processAICommand = (cmd: string): { reply: string; action?: string } => {
@@ -547,18 +585,72 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
     return { reply: 'Rozumiem, čo hovoríš. Skús mi to povedať trochu inak — napríklad „chcem pridať titulky", „vylepši kvalitu", „zrýchli to", „daj sem intro", „stabilizuj video", „pridaj hudbu". Alebo sa ma opýtaj „čo vieš?" a ukážem ti všetky možnosti.' };
   };
 
-  const sendChatMessage = () => {
+  // ── Vykonanie akcie, ktorú vybral reálny AI model ──
+  const applyAiAction = (action?: string) => {
+    switch (action) {
+      case 'captions':
+      case 'enhance':
+      case 'denoise':
+      case 'stabilize':
+      case 'colorgrade':
+        runAITool(action);
+        break;
+      case 'transition':
+        if (timelineClips.length >= 2) setClipTransitions(prev => ({ ...prev, [1]: 'fade' }));
+        else setLeftTool('transitions');
+        break;
+      case 'speedup':   setPlaybackRate(2); break;
+      case 'slowdown':  setPlaybackRate(0.5); break;
+      case 'cut':       handleCut(); break;
+      case 'music':     setShowMusicModal(true); break;
+      case 'seek':      seekTo(0); break;
+      case 'reset':     setPlaybackRate(1); seekTo(0); setSliders({ jas: 50, kontrast: 50, sytost: 50 }); break;
+      case 'addmedia':  mediaInputRef.current?.click(); break;
+      case 'intro': {
+        const title = videoName ? videoName.replace(/\.[^.]+$/, '') : 'Moje Video';
+        const tpl = INTRO_TEMPLATES[introCount % INTRO_TEMPLATES.length];
+        setIntroOverlay({ title: title.toUpperCase(), subtitle: tpl.overlay.subtitle, bg: tpl.overlay.bg });
+        setIntroCount(c => c + 1);
+        setTimelineClips(prev => [{ id: Date.now(), label: tpl.label, duration: 3, color: tpl.color }, ...prev]);
+        break;
+      }
+      case 'outro':
+        setOutroOverlay({ title: 'ĎAKUJEM ZA SLEDOVANIE' });
+        setTimelineClips(prev => [...prev, { id: Date.now(), label: 'OUTRO', duration: 3, color: 'from-accent to-accent/70' }]);
+        break;
+      default:
+        break;
+    }
+  };
+
+  const sendChatMessage = async () => {
     const text = chatInput.trim();
     if (!text || chatThinking) return;
-    setChatMessages(prev => [...prev, { role: 'user', text }]);
+    const history = [...chatMessages, { role: 'user' as const, text }];
+    setChatMessages(history);
     setChatInput('');
     setChatThinking(true);
-    setTimeout(() => {
-      const result = processAICommand(text);
+
+    const context = `klipov na časovej osi: ${timelineClips.length}, dĺžka: ${formatTime(duration)}, pozícia: ${formatTime(currentTime)}, rýchlosť: ${playbackRate}×, aplikované AI nástroje: ${[...appliedTools].join(', ') || 'žiadne'}`;
+
+    try {
+      const result = await chatWithEditorAI({
+        data: {
+          messages: history.slice(-12).map(m => ({ role: m.role, text: m.text })),
+          context,
+        },
+      });
+      applyAiAction(result.action);
       setChatMessages(prev => [...prev, { role: 'ai', text: result.reply, action: result.action }]);
+    } catch {
+      // Záloha: lokálne rozpoznanie príkazov, keby AI služba nebola dostupná
+      const fallback = processAICommand(text);
+      setChatMessages(prev => [...prev, { role: 'ai', text: fallback.reply, action: fallback.action }]);
+    } finally {
       setChatThinking(false);
-    }, 800 + Math.random() * 700);
+    }
   };
+
 
   const panelTabs: { id: ActivePanel; label: string; icon: React.ElementType }[] = [
     { id: 'ai',      label: 'AI',      icon: Sparkles },
@@ -669,7 +761,7 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
         <AnimatePresence>
           {leftTool === 'transitions' && (
             <motion.div initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }} transition={{ duration: 0.18 }}
-              className="absolute left-11 top-0 z-30 w-56 bg-card border border-primary/20 rounded-r-xl rounded-b-xl shadow-2xl p-3 overflow-y-auto max-h-[70vh]">
+              className="absolute left-11 top-0 z-30 w-64 bg-card border border-primary/20 rounded-r-xl rounded-b-xl shadow-2xl p-3 overflow-y-auto max-h-[75vh]">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Prechody</p>
                 <button onClick={() => setLeftTool('select')} className="text-muted-foreground hover:text-foreground p-0.5"><X className="w-3.5 h-3.5" /></button>
@@ -679,18 +771,19 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
               ) : (
                 <p className="text-[9px] text-green-400/80 bg-green-400/5 border border-green-400/15 rounded-lg px-2 py-1.5 mb-2">Prechod pred klipom <span className="font-bold">{selectedGap + 1}</span></p>
               )}
-              <div className="grid grid-cols-4 gap-1">
+              <div className="grid grid-cols-3 gap-1.5">
                 {TRANSITIONS.map(t => {
                   const isActive = selectedGap !== null && clipTransitions[selectedGap] === t.id;
                   return (
                     <button key={t.id} onClick={() => { if (selectedGap !== null) { setClipTransitions(prev => prev[selectedGap] === t.id ? Object.fromEntries(Object.entries(prev).filter(([k]) => Number(k) !== selectedGap)) : { ...prev, [selectedGap]: t.id }); } }}
-                      className={`flex flex-col items-center gap-0.5 p-1.5 rounded-lg border text-center transition-all ${isActive ? 'border-primary bg-primary/20 text-primary shadow-[0_0_8px_-2px_rgba(124,58,237,0.5)]' : 'border-primary/10 bg-card/60 hover:border-primary/40 hover:bg-primary/5 text-muted-foreground'}`} title={t.label}>
-                      <span className="text-sm leading-none">{t.emoji}</span>
-                      <span className="text-[7px] leading-tight mt-0.5 w-full truncate">{t.label}</span>
+                      className={`flex flex-col items-center gap-1 p-1 rounded-lg border text-center transition-all ${isActive ? 'border-primary bg-primary/20 text-primary shadow-[0_0_8px_-2px_rgba(124,58,237,0.5)]' : 'border-primary/10 bg-card/60 hover:border-primary/40 hover:bg-primary/5 text-muted-foreground'}`} title={t.label}>
+                      <TransitionPreview id={t.id} />
+                      <span className="text-[7px] leading-tight w-full truncate">{t.label}</span>
                     </button>
                   );
                 })}
               </div>
+
             </motion.div>
           )}
         </AnimatePresence>
