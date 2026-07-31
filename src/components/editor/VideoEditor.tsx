@@ -714,27 +714,8 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
             </div>
           ))}
 
-          {/* AI Chat button — prominent */}
-          <div className="my-1 w-full flex justify-center">
-            <div className="w-px h-4 bg-primary/15" />
-          </div>
-          <div className="relative group/tip">
-            <button onClick={() => setShowAIChat(true)} title="AI Asistent"
-              className="w-9 h-9 rounded-xl flex items-center justify-center transition-all bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white shadow-[0_0_15px_-3px_rgba(124,58,237,0.7)] hover:scale-110">
-              <Bot className="w-4 h-4" />
-            </button>
-            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green-400 border-2 border-card animate-pulse" />
-            <AnimatePresence>
-              {(tooltipTool as string) === 'ai-chat' && (
-                <motion.div initial={{ opacity: 0, x: -4 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} className="absolute left-full ml-2 top-1/2 -translate-y-1/2 z-50 pointer-events-none">
-                  <div className="bg-card border border-primary/20 rounded-lg px-2.5 py-1.5 shadow-xl whitespace-nowrap">
-                    <p className="text-xs font-semibold text-foreground">AI Asistent</p>
-                    <p className="text-[10px] text-muted-foreground">Napíš AI čo má urobiť s videom</p>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+
+
 
           <div className="mt-auto mb-1 relative group/tip">
             <button onClick={() => setShowMusicModal(true)} title="Pridať hudbu"
