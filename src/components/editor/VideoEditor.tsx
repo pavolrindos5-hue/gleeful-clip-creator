@@ -98,6 +98,39 @@ const INTRO_TEMPLATES = [
   { label: 'INTRO', color: 'from-rose-500 to-pink-600', overlay: { subtitle: 'Predstavuje', bg: 'from-black via-rose-500/30 to-black' } },
 ];
 
+// ── Živá ukážka prechodu (ako v PowerDirectore) ──
+const TRANSITION_ANIM: Record<string, { initial: Record<string, unknown>; animate: Record<string, unknown> }> = {
+  'fade':      { initial: { opacity: 0 },                          animate: { opacity: 1 } },
+  'wipe-l':    { initial: { clipPath: 'inset(0 0 0 100%)' },       animate: { clipPath: 'inset(0 0 0 0%)' } },
+  'wipe-r':    { initial: { clipPath: 'inset(0 100% 0 0)' },       animate: { clipPath: 'inset(0 0% 0 0)' } },
+  'zoom-in':   { initial: { scale: 0.3, opacity: 0 },              animate: { scale: 1, opacity: 1 } },
+  'zoom-out':  { initial: { scale: 1.8, opacity: 0 },              animate: { scale: 1, opacity: 1 } },
+  'slide-l':   { initial: { x: '100%' },                           animate: { x: '0%' } },
+  'slide-r':   { initial: { x: '-100%' },                          animate: { x: '0%' } },
+  'rotate':    { initial: { rotate: -120, scale: 0.4, opacity: 0 }, animate: { rotate: 0, scale: 1, opacity: 1 } },
+  'dissolve':  { initial: { opacity: 0, filter: 'blur(6px)' },     animate: { opacity: 1, filter: 'blur(0px)' } },
+  'flash':     { initial: { opacity: 0, filter: 'brightness(6)' }, animate: { opacity: 1, filter: 'brightness(1)' } },
+  'blur':      { initial: { opacity: 0, filter: 'blur(10px)' },    animate: { opacity: 1, filter: 'blur(0px)' } },
+  'glitch':    { initial: { opacity: 0, x: '12%', skewX: 18 },     animate: { opacity: 1, x: '0%', skewX: 0 } },
+};
+
+function TransitionPreview({ id }: { id: string }) {
+  const anim = TRANSITION_ANIM[id] ?? TRANSITION_ANIM.fade;
+  return (
+    <div className="relative w-full aspect-video rounded-md overflow-hidden bg-gradient-to-br from-violet-700 to-indigo-600">
+      <div className="absolute inset-0 flex items-center justify-center text-[8px] font-bold text-white/70">A</div>
+      <motion.div
+        className="absolute inset-0 bg-gradient-to-br from-fuchsia-500 to-amber-400 flex items-center justify-center text-[8px] font-bold text-black/60"
+        initial={anim.initial}
+        animate={anim.animate}
+        transition={{ duration: 0.9, ease: 'easeInOut', repeat: Infinity, repeatType: 'reverse', repeatDelay: 0.35 }}
+      >
+        B
+      </motion.div>
+    </div>
+  );
+}
+
 export default function VideoEditor({ videoUrl, videoName, isImage = false }: VideoEditorProps) {
   const [isPlaying, setIsPlaying]       = useState(false);
   const [isMuted, setIsMuted]           = useState(false);
