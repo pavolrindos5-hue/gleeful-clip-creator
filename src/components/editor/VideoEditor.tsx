@@ -551,18 +551,72 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
     return { reply: 'Rozumiem, čo hovoríš. Skús mi to povedať trochu inak — napríklad „chcem pridať titulky", „vylepši kvalitu", „zrýchli to", „daj sem intro", „stabilizuj video", „pridaj hudbu". Alebo sa ma opýtaj „čo vieš?" a ukážem ti všetky možnosti.' };
   };
 
-  const sendChatMessage = () => {
+  // ── Vykonanie akcie, ktorú vybral reálny AI model ──
+  const applyAiAction = (action?: string) => {
+    switch (action) {
+      case 'captions':
+      case 'enhance':
+      case 'denoise':
+      case 'stabilize':
+      case 'colorgrade':
+        runAITool(action);
+        break;
+      case 'transition':
+        if (timelineClips.length >= 2) setClipTransitions(prev => ({ ...prev, [1]: 'fade' }));
+        else setLeftTool('transitions');
+        break;
+      case 'speedup':   setPlaybackRate(2); break;
+      case 'slowdown':  setPlaybackRate(0.5); break;
+      case 'cut':       handleCut(); break;
+      case 'music':     setShowMusicModal(true); break;
+      case 'seek':      seekTo(0); break;
+      case 'reset':     setPlaybackRate(1); seekTo(0); setSliders({ jas: 50, kontrast: 50, sytost: 50 }); break;
+      case 'addmedia':  mediaInputRef.current?.click(); break;
+      case 'intro': {
+        const title = videoName ? videoName.replace(/\.[^.]+$/, '') : 'Moje Video';
+        const tpl = INTRO_TEMPLATES[introCount % INTRO_TEMPLATES.length];
+        setIntroOverlay({ title: title.toUpperCase(), subtitle: tpl.overlay.subtitle, bg: tpl.overlay.bg });
+        setIntroCount(c => c + 1);
+        setTimelineClips(prev => [{ id: Date.now(), label: tpl.label, duration: 3, color: tpl.color }, ...prev]);
+        break;
+      }
+      case 'outro':
+        setOutroOverlay({ title: 'ĎAKUJEM ZA SLEDOVANIE' });
+        setTimelineClips(prev => [...prev, { id: Date.now(), label: 'OUTRO', duration: 3, color: 'from-accent to-accent/70' }]);
+        break;
+      default:
+        break;
+    }
+  };
+
+  const sendChatMessage = async () => {
     const text = chatInput.trim();
     if (!text || chatThinking) return;
-    setChatMessages(prev => [...prev, { role: 'user', text }]);
+    const history = [...chatMessages, { role: 'user' as const, text }];
+    setChatMessages(history);
     setChatInput('');
     setChatThinking(true);
-    setTimeout(() => {
-      const result = processAICommand(text);
+
+    const context = `klipov na časovej osi: ${timelineClips.length}, dĺžka: ${formatTime(duration)}, pozícia: ${formatTime(currentTime)}, rýchlosť: ${playbackRate}×, aplikované AI nástroje: ${[...appliedTools].join(', ') || 'žiadne'}`;
+
+    try {
+      const result = await chatWithEditorAI({
+        data: {
+          messages: history.slice(-12).map(m => ({ role: m.role, text: m.text })),
+          context,
+        },
+      });
+      applyAiAction(result.action);
       setChatMessages(prev => [...prev, { role: 'ai', text: result.reply, action: result.action }]);
+    } catch {
+      // Záloha: lokálne rozpoznanie príkazov, keby AI služba nebola dostupná
+      const fallback = processAICommand(text);
+      setChatMessages(prev => [...prev, { role: 'ai', text: fallback.reply, action: fallback.action }]);
+    } finally {
       setChatThinking(false);
-    }, 800 + Math.random() * 700);
+    }
   };
+
 
   const panelTabs: { id: ActivePanel; label: string; icon: React.ElementType }[] = [
     { id: 'ai',      label: 'AI',      icon: Sparkles },
