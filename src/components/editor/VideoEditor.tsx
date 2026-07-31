@@ -5,12 +5,11 @@ import {
   Scissors, Wand2, Sparkles, Layers, Clock, Download,
   ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCcw, Sliders,
   Film, Music, Type, Crop, Sun, Contrast, Palette,
-  Wind, Zap, Plus, Trash2, Check, X, Send,
+  Wind, Zap, Plus, Trash2, Check, X,
   Maximize2, AlignLeft, PanelRightClose, PanelRightOpen,
   Headphones, FileMusic, Shuffle, SlidersHorizontal,
-  Bot, MessageSquare,
 } from 'lucide-react';
-import { chatWithEditorAI } from '@/lib/ai.functions';
+
 
 interface VideoEditorProps {
   videoUrl: string | null;
