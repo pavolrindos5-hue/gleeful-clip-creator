@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, type TargetAndTransition } from 'framer-motion';
 import {
   Play, Pause, SkipBack, SkipForward, Volume2, VolumeX,
   Scissors, Wand2, Sparkles, Layers, Clock, Download,
@@ -99,7 +99,7 @@ const INTRO_TEMPLATES = [
 ];
 
 // ── Živá ukážka prechodu (ako v PowerDirectore) ──
-const TRANSITION_ANIM: Record<string, { initial: Record<string, unknown>; animate: Record<string, unknown> }> = {
+const TRANSITION_ANIM: Record<string, { initial: TargetAndTransition; animate: TargetAndTransition }> = {
   'fade':      { initial: { opacity: 0 },                          animate: { opacity: 1 } },
   'wipe-l':    { initial: { clipPath: 'inset(0 0 0 100%)' },       animate: { clipPath: 'inset(0 0 0 0%)' } },
   'wipe-r':    { initial: { clipPath: 'inset(0 100% 0 0)' },       animate: { clipPath: 'inset(0 0% 0 0)' } },
