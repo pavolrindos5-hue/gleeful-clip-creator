@@ -33,8 +33,8 @@ export const chatWithEditorAI = createServerFn({ method: "POST" })
     const gateway = createLovableAiGatewayProvider(key, { structuredOutputs: true });
     const model = gateway("openai/gpt-5.6-sol");
 
+    const system = SYSTEM + (data.context ? `\n\nStav projektu: ${data.context}` : "");
     const messages = [
-      { role: "system" as const, content: SYSTEM + (data.context ? `\n\nStav projektu: ${data.context}` : "") },
       ...data.messages.map((m) => ({
         role: m.role === "ai" ? ("assistant" as const) : ("user" as const),
         content: m.text,
@@ -44,6 +44,7 @@ export const chatWithEditorAI = createServerFn({ method: "POST" })
     try {
       const { output } = await generateText({
         model,
+        system,
         messages,
         output: Output.object({
           schema: z.object({
