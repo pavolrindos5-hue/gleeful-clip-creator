@@ -1236,88 +1236,8 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
         )}
       </AnimatePresence>
 
-      {/* ── AI Chat Panel ── */}
-      <AnimatePresence>
-        {showAIChat && (
-          <>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40" onClick={() => setShowAIChat(false)} />
-            <motion.div
-              initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }} transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-              className="fixed left-0 top-0 bottom-0 w-[85vw] max-w-sm z-50 bg-card border-r border-primary/20 flex flex-col shadow-[12px_0_60px_-10px_rgba(0,0,0,0.7)]"
-              onClick={(e) => e.stopPropagation()}
-              onMouseDown={(e) => e.stopPropagation()}
-              onTouchStart={(e) => e.stopPropagation()}
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between p-3 border-b border-primary/10 shrink-0 bg-gradient-to-r from-violet-600/20 to-fuchsia-600/20">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-600 to-fuchsia-600 flex items-center justify-center shadow-[0_0_15px_-3px_rgba(124,58,237,0.7)]">
-                    <Bot className="w-4 h-4 text-white" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold">AI Asistent</p>
-                    <p className="text-[10px] text-green-400 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />Online</p>
-                  </div>
-                </div>
-                <button onClick={() => setShowAIChat(false)} className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-primary/10 rounded-lg transition-all"><X className="w-4 h-4" /></button>
-              </div>
 
-              {/* Messages */}
-              <div ref={chatScrollRef} className="flex-1 overflow-y-auto p-3 space-y-2.5">
-                {chatMessages.map((msg, i) => (
-                  <motion.div key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
-                    className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[85%] px-3 py-2 rounded-2xl text-xs leading-relaxed ${
-                      msg.role === 'user'
-                        ? 'bg-primary text-primary-foreground rounded-br-sm'
-                        : 'bg-card border border-primary/15 text-foreground rounded-bl-sm'
-                    }`}>
-                      {msg.role === 'ai' && <Bot className="inline w-3 h-3 text-primary mr-1 mb-0.5" />}
-                      {msg.text}
-                      {msg.action && <span className="block mt-1 text-[9px] text-primary/60 italic">✓ Akcia aplikovaná</span>}
-                    </div>
-                  </motion.div>
-                ))}
-                {chatThinking && (
-                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start">
-                    <div className="bg-card border border-primary/15 px-3 py-2 rounded-2xl rounded-bl-sm flex items-center gap-1.5">
-                      <Bot className="w-3 h-3 text-primary" />
-                      {[0,1,2].map(i => <motion.div key={i} animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }} className="w-1 h-1 bg-primary rounded-full" />)}
-                    </div>
-                  </motion.div>
-                )}
-              </div>
 
-              {/* Quick suggestions */}
-              <div className="px-3 pb-1.5 flex gap-1.5 flex-wrap shrink-0">
-                {['Pridaj titulky', 'Vylepši kvalitu', 'Zrýchli', 'Vynuluj čas'].map(s => (
-                  <button key={s} onClick={() => { setChatInput(s); }} className="text-[9px] px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 transition-all whitespace-nowrap">{s}</button>
-                ))}
-              </div>
-
-              {/* Input */}
-              <form onSubmit={(e) => { e.preventDefault(); sendChatMessage(); }} className="p-3 border-t border-primary/10 shrink-0 flex items-center gap-2">
-                <input
-                  ref={chatInputRef}
-                  type="text"
-                  inputMode="text"
-                  autoCapitalize="sentences"
-                  autoComplete="off"
-                  value={chatInput}
-                  onChange={e => setChatInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); } }}
-                  placeholder="Napíš mi, čo chceš urobiť…"
-                  className="flex-1 bg-background border border-primary/20 rounded-xl px-3 py-2.5 text-xs focus:outline-none focus:border-primary/60 placeholder:text-muted-foreground/50 text-foreground"
-                />
-                <button type="submit" disabled={!chatInput.trim() || chatThinking}
-                  className="w-9 h-9 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground flex items-center justify-center transition-all hover:scale-105 disabled:opacity-40 disabled:hover:scale-100 shrink-0">
-                  <Send className="w-4 h-4" />
-                </button>
-              </form>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
     </motion.div>
   );
 }
