@@ -222,18 +222,21 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
     probe.src = url;
   }, []);
 
-  // Auto-scroll chat to bottom
+  // Spusti prechod v náhľade, keď playhead prejde na ďalší klip s prechodom
   useEffect(() => {
-    if (chatScrollRef.current) chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
-  }, [chatMessages, chatThinking]);
+    if (prevClipIndexRef.current === activeClipIndex) return;
+    prevClipIndexRef.current = activeClipIndex;
+    const t = clipTransitions[activeClipIndex];
+    if (t) setPlayingTransition({ id: t, key: Date.now() });
+  }, [activeClipIndex, clipTransitions]);
 
-  // Focus input when chat opens
+  // Po dobehnutí animácie prechod ukonči
   useEffect(() => {
-    if (showAIChat) {
-      const t = setTimeout(() => chatInputRef.current?.focus(), 350);
-      return () => clearTimeout(t);
-    }
-  }, [showAIChat]);
+    if (!playingTransition) return;
+    const t = setTimeout(() => setPlayingTransition(null), 800);
+    return () => clearTimeout(t);
+  }, [playingTransition]);
+
 
   useEffect(() => {
     if (!isPlaying || previewClip?.type === 'video') return;
