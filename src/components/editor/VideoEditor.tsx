@@ -160,15 +160,12 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
   const [outroOverlay, setOutroOverlay] = useState<{ title: string } | null>(null);
   const [introCount, setIntroCount] = useState(0);
 
-  // AI Chat state
-  const [showAIChat, setShowAIChat]     = useState(false);
-  const [chatMessages, setChatMessages] = useState<ChatMsg[]>([
-    { role: 'ai', text: 'Ahoj! Som tvoj AI asistent pre strih videa. Môžeš mi písať úplne normálne — ako kamarátovi. Napríklad „chcel by som sem pridať intro", „môžeš pridať titulky?" alebo „zrýchli to trochu". Čo by si chcel urobiť?' },
-  ]);
-  const [chatInput, setChatInput]       = useState('');
-  const [chatThinking, setChatThinking] = useState(false);
-  const chatScrollRef                  = useRef<HTMLDivElement>(null);
-  const chatInputRef                   = useRef<HTMLInputElement>(null);
+  // Prehrávaný prechod v náhľade
+  const [playingTransition, setPlayingTransition] = useState<{ id: string; key: number } | null>(null);
+  const playTransitionPreview = useCallback((id: string) => {
+    setPlayingTransition({ id, key: Date.now() });
+  }, []);
+
 
   const [timelineClips, setTimelineClips] = useState<TimelineClip[]>(() => [{
     id: 1,
