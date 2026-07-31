@@ -775,7 +775,7 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
                 {TRANSITIONS.map(t => {
                   const isActive = selectedGap !== null && clipTransitions[selectedGap] === t.id;
                   return (
-                    <button key={t.id} onClick={() => { if (selectedGap !== null) { setClipTransitions(prev => prev[selectedGap] === t.id ? Object.fromEntries(Object.entries(prev).filter(([k]) => Number(k) !== selectedGap)) : { ...prev, [selectedGap]: t.id }); } }}
+                    <button key={t.id} onClick={() => { playTransitionPreview(t.id); if (selectedGap !== null) { setClipTransitions(prev => prev[selectedGap] === t.id ? Object.fromEntries(Object.entries(prev).filter(([k]) => Number(k) !== selectedGap)) : { ...prev, [selectedGap]: t.id }); } }}
                       className={`flex flex-col items-center gap-1 p-1 rounded-lg border text-center transition-all ${isActive ? 'border-primary bg-primary/20 text-primary shadow-[0_0_8px_-2px_rgba(124,58,237,0.5)]' : 'border-primary/10 bg-card/60 hover:border-primary/40 hover:bg-primary/5 text-muted-foreground'}`} title={t.label}>
                       <TransitionPreview id={t.id} />
                       <span className="text-[7px] leading-tight w-full truncate">{t.label}</span>
