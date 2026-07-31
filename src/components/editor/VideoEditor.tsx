@@ -105,7 +105,7 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
   const [activeTool, setActiveTool]    = useState<AITool>(null);
   const [toolProgress, setToolProgress] = useState<Record<string, number>>({});
   const [appliedTools, setAppliedTools] = useState<Set<string>>(new Set());
-  const [sliders, setSliders]          = useState({ jas: 65, kontrast: 50, sytost: 72 });
+  const [sliders, setSliders]          = useState({ jas: 50, kontrast: 50, sytost: 50 });
   const [timelineZoom, setTimelineZoom] = useState(1);
   const [leftTool, setLeftTool]         = useState<LeftTool>('select');
   const [subtitleIdx, setSubtitleIdx]   = useState(0);
@@ -401,11 +401,15 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
 
   const videoFilter = useMemo(() => {
     const filters: string[] = [];
+    // Manuálne posuvníky (50 = neutrálna hodnota)
+    if (sliders.jas !== 50)      filters.push(`brightness(${(sliders.jas / 50).toFixed(2)})`);
+    if (sliders.kontrast !== 50) filters.push(`contrast(${(sliders.kontrast / 50).toFixed(2)})`);
+    if (sliders.sytost !== 50)   filters.push(`saturate(${(sliders.sytost / 50).toFixed(2)})`);
     if (appliedTools.has('denoise'))    filters.push('contrast(1.08) saturate(1.12)');
     if (appliedTools.has('enhance'))    filters.push('brightness(1.05) contrast(1.06)');
     if (appliedTools.has('colorgrade')) filters.push('saturate(1.3) hue-rotate(5deg)');
     return filters.join(' ') || undefined;
-  }, [appliedTools]);
+  }, [appliedTools, sliders]);
 
   // ── AI Chat: parse user command and apply ──
   const processAICommand = (cmd: string): { reply: string; action?: string } => {
