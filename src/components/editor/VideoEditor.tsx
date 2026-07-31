@@ -33,7 +33,6 @@ type TimelineClip = {
 
 type MusicClip = { id: number; label: string };
 
-type ChatMsg = { role: 'user' | 'ai'; text: string; action?: string };
 
 const AI_TOOLS = [
   { id: 'enhance',    label: 'Auto Enhance',    icon: Sparkles, desc: 'AI analyzuje každý snímok a automaticky vylepší jas, kontrast a ostrosť', detail: 'Využíva neurónové siete trénované na 10 miliónoch videí' },
