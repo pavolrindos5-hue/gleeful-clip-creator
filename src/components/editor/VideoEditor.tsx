@@ -28,6 +28,7 @@ type TimelineClip = {
   duration: number;
   type: 'video' | 'image';
   thumbUrl?: string;
+  src?: string;
 };
 
 type MusicClip = { id: number; label: string };
@@ -142,16 +143,54 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
     duration: 60,
     type: isImage ? 'image' : 'video',
     thumbUrl: isImage ? (videoUrl ?? undefined) : undefined,
+    src: videoUrl ?? undefined,
   }]);
 
   const videoRef      = useRef<HTMLVideoElement>(null);
   const musicInputRef = useRef<HTMLInputElement>(null);
+  const mediaInputRef = useRef<HTMLInputElement>(null);
   const musicAudioRef = useRef<HTMLInputElement>(null);
   const timelineTrackRef = useRef<HTMLDivElement>(null);
 
   const totalDuration = timelineClips.reduce((s, c) => s + c.duration, 0);
-  const duration = isImage ? totalDuration : (videoRef.current?.duration || totalDuration);
+  const duration = totalDuration;
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+
+  // Klip, ktorý je práve pod prehrávacou hlavou (určuje veľkú ukážku)
+  const { activeClip, activeClipStart } = useMemo(() => {
+    let cum = 0;
+    for (const c of timelineClips) {
+      if (currentTime >= cum && currentTime < cum + c.duration) return { activeClip: c, activeClipStart: cum };
+      cum += c.duration;
+    }
+    const last = timelineClips[timelineClips.length - 1];
+    return { activeClip: last ?? null, activeClipStart: Math.max(0, cum - (last?.duration ?? 0)) };
+  }, [timelineClips, currentTime]);
+
+  const previewClip = activeClip && activeClip.src ? activeClip : (timelineClips.find(c => c.src) ?? null);
+
+  const addMediaFile = useCallback((file: File) => {
+    const isImg = file.type.startsWith('image/');
+    const isVid = file.type.startsWith('video/') || /\.(mp4|mov|webm|avi|mkv|m4v|wmv|flv|3gp)$/i.test(file.name);
+    if (!isImg && !isVid) { alert('Nepodporovaný formát. Použi video alebo obrázok.'); return; }
+    const url = URL.createObjectURL(file);
+    const color = CLIP_COLORS[Math.floor(Math.random() * CLIP_COLORS.length)];
+    const push = (dur: number) => setTimelineClips(prev => [...prev, {
+      id: Date.now() + Math.floor(Math.random() * 1000),
+      label: file.name.replace(/\.[^/.]+$/, ''),
+      color,
+      duration: dur,
+      type: isImg ? 'image' : 'video',
+      thumbUrl: isImg ? url : undefined,
+      src: url,
+    }]);
+    if (isImg) { push(5); return; }
+    const probe = document.createElement('video');
+    probe.preload = 'metadata';
+    probe.onloadedmetadata = () => push(Math.max(1, Math.round(probe.duration || 10)));
+    probe.onerror = () => push(10);
+    probe.src = url;
+  }, []);
 
   // Auto-scroll chat to bottom
   useEffect(() => {
@@ -167,7 +206,7 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
   }, [showAIChat]);
 
   useEffect(() => {
-    if (!isImage || !isPlaying) return;
+    if (!isPlaying || previewClip?.type === 'video') return;
     const id = setInterval(() => {
       setCurrentTime(t => {
         if (t + 0.1 >= totalDuration) { setIsPlaying(false); return 0; }
@@ -175,7 +214,7 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
       });
     }, 100);
     return () => clearInterval(id);
-  }, [isImage, isPlaying, totalDuration]);
+  }, [isPlaying, totalDuration, previewClip]);
 
   useEffect(() => {
     if (!appliedTools.has('captions')) return;
@@ -212,7 +251,7 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
     setIsPlaying(p => !p);
   };
 
-  const handleTimeUpdate = () => { if (videoRef.current && !isScrubbing) setCurrentTime(videoRef.current.currentTime); };
+  const handleTimeUpdate = () => { if (videoRef.current && !isScrubbing) setCurrentTime(activeClipStart + videoRef.current.currentTime); };
 
   useEffect(() => {
     if (introOverlay && currentTime > 3) setIntroOverlay(null);
@@ -222,8 +261,15 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
   const seekTo = useCallback((time: number) => {
     const clamped = Math.max(0, Math.min(time, duration));
     setCurrentTime(clamped);
-    if (videoRef.current) videoRef.current.currentTime = clamped;
-  }, [duration]);
+    if (videoRef.current) {
+      let cum = 0;
+      for (const c of timelineClips) {
+        if (clamped >= cum && clamped < cum + c.duration) break;
+        cum += c.duration;
+      }
+      videoRef.current.currentTime = Math.max(0, clamped - cum);
+    }
+  }, [duration, timelineClips]);
 
   // ── Draggable playhead ──
   const handlePlayheadMouseDown = useCallback((e: React.MouseEvent) => {
@@ -688,9 +734,10 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
         {/* Center: Video Preview */}
         <div className="flex-1 flex flex-col bg-black relative overflow-hidden min-w-0" onClick={leftTool === 'cut' ? handleCut : undefined} style={{ cursor: leftTool === 'cut' ? 'crosshair' : leftTool === 'crop' ? 'nwse-resize' : 'default' }}>
           <div className="flex-1 relative overflow-hidden min-h-0">
-            {videoUrl ? (
-              isImage ? <img src={videoUrl} className="w-full h-full object-contain" style={{ filter: videoFilter }} alt={videoName ?? 'Preview'} />
-              : <video ref={videoRef} src={videoUrl} className="w-full h-full object-contain" style={{ filter: videoFilter }} onTimeUpdate={handleTimeUpdate} onEnded={() => setIsPlaying(false)} muted={isMuted} />
+            {previewClip?.src ? (
+              previewClip.type === 'image'
+              ? <img key={previewClip.id} src={previewClip.src} className="w-full h-full object-contain" style={{ filter: videoFilter }} alt={previewClip.label} />
+              : <video key={previewClip.id} ref={videoRef} src={previewClip.src} className="w-full h-full object-contain" style={{ filter: videoFilter }} onTimeUpdate={handleTimeUpdate} onEnded={() => setIsPlaying(false)} muted={isMuted} />
             ) : (
               <div className="w-full h-full flex items-center justify-center"><div className="text-center space-y-3 opacity-40"><Film className="w-20 h-20 mx-auto text-primary/40" /><p className="text-muted-foreground text-sm">Žiadne video nevybrané</p></div></div>
             )}
@@ -869,7 +916,7 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
                           <div className="flex-1 min-w-0"><p className="text-xs font-medium truncate">{clip.label}</p><p className="text-[10px] text-muted-foreground">{Math.round(clip.duration)}s</p></div>
                         </div>
                       ))}
-                      <button onClick={() => (musicInputRef.current as HTMLInputElement | null)?.click()} className="w-full p-2 rounded-xl border border-dashed border-primary/20 text-muted-foreground hover:border-primary/50 hover:text-primary transition-all text-xs flex items-center justify-center gap-2"><Plus className="w-3.5 h-3.5" /> Pridať klip</button>
+                      <button onClick={() => mediaInputRef.current?.click()} className="w-full p-2 rounded-xl border border-dashed border-primary/20 text-muted-foreground hover:border-primary/50 hover:text-primary transition-all text-xs flex items-center justify-center gap-2"><Plus className="w-3.5 h-3.5" /> Pridať klip</button>
                     </motion.div>
                   )}
                   {activePanel === 'audio' && (
@@ -999,6 +1046,16 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
                       );
                       return parts;
                     })}
+                    {/* Pridať fotku alebo video na koniec časovej osi */}
+                    <button
+                      onMouseDown={e => e.stopPropagation()}
+                      onClick={e => { e.stopPropagation(); mediaInputRef.current?.click(); }}
+                      title="Pridať fotku alebo video"
+                      className="shrink-0 h-full w-14 flex flex-col items-center justify-center gap-0.5 border border-dashed border-primary/30 text-muted-foreground hover:text-primary hover:bg-primary/10 hover:border-primary/60 transition-all"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span className="text-[8px] font-semibold">Médium</span>
+                    </button>
                     {/* Click zone filler */}
                     <div className="timeline-clickzone flex-1 h-full" />
                   </div>
@@ -1041,7 +1098,7 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
             <div className="h-4" />
             <input ref={musicInputRef} type="file" accept="video/*,image/*" className="hidden"
               onChange={e => { const file = e.target.files?.[0]; if (!file) return; const img = file.type.startsWith('image/'); const url = URL.createObjectURL(file); setTimelineClips(prev => [...prev, { id: Date.now(), label: img ? `Foto ${prev.filter(c => c.type === 'image').length + 1}` : `Klip ${prev.length + 2}`, color: CLIP_COLORS[prev.length % CLIP_COLORS.length], duration: 30, type: img ? 'image' : 'video', thumbUrl: img ? url : undefined }]); e.target.value = ''; }} />
-            <button onClick={() => (musicInputRef.current as HTMLInputElement | null)?.click()} title="Pridať klip" className="h-16 w-full flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all"><Plus className="w-3.5 h-3.5" /></button>
+            <button onClick={() => mediaInputRef.current?.click()} title="Pridať klip" className="h-16 w-full flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all"><Plus className="w-3.5 h-3.5" /></button>
             {appliedTools.has('captions') && <div className="h-7" />}
             <button onClick={() => setShowMusicModal(true)} title="Pridať hudbu" className="h-10 w-full flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all"><Plus className="w-3.5 h-3.5" /></button>
           </div>
@@ -1064,6 +1121,8 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
       </div>
 
       {/* Music Modal */}
+      <input ref={mediaInputRef} type="file" accept="video/*,image/*,.mp4,.mov,.webm,.avi,.mkv,.m4v" className="hidden"
+        onChange={e => { const f = e.target.files?.[0]; if (f) addMediaFile(f); e.target.value = ''; }} />
       <input ref={musicAudioRef} type="file" accept="audio/*" className="hidden"
         onChange={e => { const file = e.target.files?.[0]; if (file) setMusicClips(prev => [...prev, { id: Date.now(), label: file.name.replace(/\.[^/.]+$/, '') }]); e.target.value = ''; setShowMusicModal(false); }} />
       <AnimatePresence>
