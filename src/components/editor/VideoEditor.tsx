@@ -5,12 +5,11 @@ import {
   Scissors, Wand2, Sparkles, Layers, Clock, Download,
   ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCcw, Sliders,
   Film, Music, Type, Crop, Sun, Contrast, Palette,
-  Wind, Zap, Plus, Trash2, Check, X, Send,
+  Wind, Zap, Plus, Trash2, Check, X,
   Maximize2, AlignLeft, PanelRightClose, PanelRightOpen,
   Headphones, FileMusic, Shuffle, SlidersHorizontal,
-  Bot, MessageSquare,
 } from 'lucide-react';
-import { chatWithEditorAI } from '@/lib/ai.functions';
+
 
 interface VideoEditorProps {
   videoUrl: string | null;
@@ -34,7 +33,6 @@ type TimelineClip = {
 
 type MusicClip = { id: number; label: string };
 
-type ChatMsg = { role: 'user' | 'ai'; text: string; action?: string };
 
 const AI_TOOLS = [
   { id: 'enhance',    label: 'Auto Enhance',    icon: Sparkles, desc: 'AI analyzuje každý snímok a automaticky vylepší jas, kontrast a ostrosť', detail: 'Využíva neurónové siete trénované na 10 miliónoch videí' },
@@ -160,15 +158,12 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
   const [outroOverlay, setOutroOverlay] = useState<{ title: string } | null>(null);
   const [introCount, setIntroCount] = useState(0);
 
-  // AI Chat state
-  const [showAIChat, setShowAIChat]     = useState(false);
-  const [chatMessages, setChatMessages] = useState<ChatMsg[]>([
-    { role: 'ai', text: 'Ahoj! Som tvoj AI asistent pre strih videa. Môžeš mi písať úplne normálne — ako kamarátovi. Napríklad „chcel by som sem pridať intro", „môžeš pridať titulky?" alebo „zrýchli to trochu". Čo by si chcel urobiť?' },
-  ]);
-  const [chatInput, setChatInput]       = useState('');
-  const [chatThinking, setChatThinking] = useState(false);
-  const chatScrollRef                  = useRef<HTMLDivElement>(null);
-  const chatInputRef                   = useRef<HTMLInputElement>(null);
+  // Prehrávaný prechod v náhľade
+  const [playingTransition, setPlayingTransition] = useState<{ id: string; key: number } | null>(null);
+  const playTransitionPreview = useCallback((id: string) => {
+    setPlayingTransition({ id, key: Date.now() });
+  }, []);
+
 
   const [timelineClips, setTimelineClips] = useState<TimelineClip[]>(() => [{
     id: 1,
@@ -190,15 +185,18 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   // Klip, ktorý je práve pod prehrávacou hlavou (určuje veľkú ukážku)
-  const { activeClip, activeClipStart } = useMemo(() => {
+  const { activeClip, activeClipStart, activeClipIndex } = useMemo(() => {
     let cum = 0;
-    for (const c of timelineClips) {
-      if (currentTime >= cum && currentTime < cum + c.duration) return { activeClip: c, activeClipStart: cum };
+    for (let i = 0; i < timelineClips.length; i++) {
+      const c = timelineClips[i];
+      if (currentTime >= cum && currentTime < cum + c.duration) return { activeClip: c, activeClipStart: cum, activeClipIndex: i };
       cum += c.duration;
     }
     const last = timelineClips[timelineClips.length - 1];
-    return { activeClip: last ?? null, activeClipStart: Math.max(0, cum - (last?.duration ?? 0)) };
+    return { activeClip: last ?? null, activeClipStart: Math.max(0, cum - (last?.duration ?? 0)), activeClipIndex: Math.max(0, timelineClips.length - 1) };
   }, [timelineClips, currentTime]);
+  const prevClipIndexRef = useRef(activeClipIndex);
+
 
   const previewClip = activeClip && activeClip.src ? activeClip : (timelineClips.find(c => c.src) ?? null);
 
@@ -225,18 +223,21 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
     probe.src = url;
   }, []);
 
-  // Auto-scroll chat to bottom
+  // Spusti prechod v náhľade, keď playhead prejde na ďalší klip s prechodom
   useEffect(() => {
-    if (chatScrollRef.current) chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
-  }, [chatMessages, chatThinking]);
+    if (prevClipIndexRef.current === activeClipIndex) return;
+    prevClipIndexRef.current = activeClipIndex;
+    const t = clipTransitions[activeClipIndex];
+    if (t) setPlayingTransition({ id: t, key: Date.now() });
+  }, [activeClipIndex, clipTransitions]);
 
-  // Focus input when chat opens
+  // Po dobehnutí animácie prechod ukonči
   useEffect(() => {
-    if (showAIChat) {
-      const t = setTimeout(() => chatInputRef.current?.focus(), 350);
-      return () => clearTimeout(t);
-    }
-  }, [showAIChat]);
+    if (!playingTransition) return;
+    const t = setTimeout(() => setPlayingTransition(null), 800);
+    return () => clearTimeout(t);
+  }, [playingTransition]);
+
 
   useEffect(() => {
     if (!isPlaying || previewClip?.type === 'video') return;
@@ -445,211 +446,8 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
     return filters.join(' ') || undefined;
   }, [appliedTools, sliders]);
 
-  // ── AI Chat: parse user command and apply ──
-  const processAICommand = (cmd: string): { reply: string; action?: string } => {
-    const lower = cmd.toLowerCase().trim();
 
-    // Úvod / pozdrav
-    if (/(ahoj|hello|hi|čau|cau|vitaj|cao|zdravím|dobrý deň|dobry den|servus|zdare)/i.test(lower)) {
-      return { reply: 'Ahoj! Som tvoj AI asistent pre strih videa. Môžeš mi písať úplne normálne — napríklad „pridaj mi sem titulky", „chcel by som vylepšiť kvalitu", „môžeš to zrýchliť?" alebo „daj sem nejaké intro". Čo by si chcel urobiť?' };
-    }
 
-    // Ďakujem
-    if (/(ďakujem|ďakujem ti|vďaka|vdaka|thanks|thx|super|paráda|parada|fakt dobr|si super|si hviezda)/i.test(lower)) {
-      return { reply: 'Rád som pomohol! 😊 Ak chceš ešte niečo upraviť, kľudne mi napíš — som tu pre teba.' };
-    }
-
-    // Čo vieš / pomoc
-    if (/(čo vieš|co vies|čo môžeš|co mozes|pomoc|help|čo dokážeš|co dokazes|aké máš|ake mas|funkcie|možnosti|moznosti)/i.test(lower)) {
-      return { reply: 'Viem toho dosť! Môžem:\n• Pridať titulky / nadpisy\n• Vylepšiť kvalitu (jas, kontrast, ostrosť)\n• Odstrániť šum a zrno\n• Stabilizovať trasenie kamery\n• Urobiť farebnú korekciu (color grade)\n• Pridať prechody medzi klipy\n• Zrýchliť alebo spomaliť video\n• Strihnúť klip na aktuálnej pozícii\n• Pridať hudbu\n• Pridať intro / outro\n\nProsta napíš, čo chceš, napríklad „chcel by som sem pridať intro".' };
-    }
-
-    // Intro
-    if (/(intro|úvod|uvod|začiatok|zaciatok|otvorenie|title card|úvodn|uvodn)/i.test(lower)) {
-      const title = videoName ? videoName.replace(/\.[^.]+$/, '') : 'Moje Video';
-      const tpl = INTRO_TEMPLATES[introCount % INTRO_TEMPLATES.length];
-      setIntroOverlay({ title: title.toUpperCase(), subtitle: tpl.overlay.subtitle, bg: tpl.overlay.bg });
-      setIntroCount(c => c + 1);
-      setTimelineClips(prev => {
-        const introClip: TimelineClip = {
-          id: Date.now(),
-          label: tpl.label,
-          duration: 3,
-          color: tpl.color,
-          thumbUrl: undefined,
-        };
-        return [introClip, ...prev];
-      });
-      const remaining = 4 - (introCount % INTRO_TEMPLATES.length);
-      return { reply: `Hotovo! Pridal som intro #${(introCount % INTRO_TEMPLATES.length) + 1} na začiatok časovej osi. Nadpis: „${title.toUpperCase()}", štýl: ${tpl.label}. ${remaining > 0 ? `Máš ešte ${remaining} ďalšie intro šablóny skúsiť — napíš znova „pridaj intro" pre iný štýl.` : 'Toto je piaty štýl — ďalšie intro bude znova prvý štýl.'} Chceš aj outro?`, action: 'intro' };
-    }
-
-    // Outro / záver
-    if (/(outro|záver|zaver|koniec|záverečn|zaverecn|koncov|ďakujem za sled|dakujem za sled)/i.test(lower)) {
-      setOutroOverlay({ title: 'ĎAKUJEM ZA SLEDovANIE' });
-      setTimelineClips(prev => {
-        const outroClip: TimelineClip = {
-          id: Date.now(),
-          label: 'OUTRO',
-          duration: 3,
-          color: 'from-accent to-accent/70',
-          thumbUrl: undefined,
-        };
-        return [...prev, outroClip];
-      });
-      return { reply: 'Pridal som outro na koniec časovej osi! Zobrazí sa nápis „ĎAKUJEM ZA SLEDovANIE" a bude hrať 3 sekundy po skončení videa. Môžeš ho vidieť, keď prehráš video až do konca. Chceš aj farebnú korekciu pre filmový vzhľad?', action: 'outro' };
-    }
-
-    // Titulky
-    if (/(titulk|caption|subtitle|nadpis|text|napís|napis|reč na text|rec na text)/i.test(lower)) {
-      runAITool('captions');
-      return { reply: 'Dobre, idem pridať titulky! Automaticky rozpoznám reč vo videu a vygenerujem titulky v slovenčine. Daj chvíľu — bude to hotové čoskoro.', action: 'captions' };
-    }
-
-    // Vylepšenie kvality
-    if (/(vylepš|vyleps|enhance|kvalit|ostrosť|ostrost|sharp|jasnej|jasnejsi|lepšie|lepsie|krásnej|krajsnej|profesionál|profesional)/i.test(lower)) {
-      runAITool('enhance');
-      return { reply: 'Spúšťam Auto Enhance! AI vylepší jas, kontrast a ostrosť každého snímku. Video bude vyzerať oveľa lepšie — daj mi chvíľu.', action: 'enhance' };
-    }
-
-    // Denoise / šum
-    if (/(šum|sum|denoise|zrno|noise|grain|šumov|sumov|odstráň šum|odstran sum|vyčist|vycist)/i.test(lower)) {
-      runAITool('denoise');
-      return { reply: 'Aplikujem AI Denoising — odstraňujem digitálny šum a zrno z videa. Bude to čisté a ostré.', action: 'denoise' };
-    }
-
-    // Stabilizácia
-    if (/(stabil|trasen|shake|wobble|tria|chvej|chvenie|roztrep)/i.test(lower)) {
-      runAITool('stabilize');
-      return { reply: 'Spúšťam AI Stabilizáciu — opravujem trasenie kamery, aby bolo video plynulé. Stačí chvíľa.', action: 'stabilize' };
-    }
-
-    // Farebná korekcia
-    if (/(farb|color|grade|korekci|sýtost|sytost|farebn|kino|filmový|filmovy|hollywood|tepl|studen|tonov)/i.test(lower)) {
-      runAITool('colorgrade');
-      return { reply: 'Aplikujem profesionálny Color Grade — filmová farebná korekcia v štýle Hollywoodu. Farby budú krásne a atmosférické.', action: 'colorgrade' };
-    }
-
-    // Prechod
-    if (/(prechod|transition|fade|prepnut|prepnutie|spoj|spojenie)/i.test(lower)) {
-      if (timelineClips.length >= 2) {
-        setClipTransitions(prev => ({ ...prev, [1]: 'fade' }));
-        return { reply: 'Pridávam prechod „Fade" medzi prvý a druhý klip. Bude to plynulé prepnutie.', action: 'transition' };
-      }
-      return { reply: 'Aby som mohol pridať prechod, potrebujem aspoň 2 klipy na časovej osi. Najprv pridaj ďalší klip — môžeš ho nahrať alebo vybrať z knižnice.' };
-    }
-
-    // Zrýchlenie
-    if (/(zrýchli|zrychli|speed up|rýchlej|rychlej|rýchlosť|rychlost|fast|rýchlejšie|rychlejsie|dvojnásob|dvojnasob)/i.test(lower)) {
-      setPlaybackRate(2);
-      return { reply: 'Nastavujem rýchlosť na 2× — video bude prehrávané dvojnásobnou rýchlosťou. Ak chceš inú rýchlosť, daj vedieť.', action: 'speed' };
-    }
-
-    // Spomalenie
-    if (/(spomal|slow|pomal|slowmo|slow-mo|slow motion|spomalšie|spomalsie)/i.test(lower)) {
-      setPlaybackRate(0.5);
-      return { reply: 'Spomaľujem video na 0.5× — pre plynulý slow-motion efekt. Bude to vyzerať kinematograficky.', action: 'speed' };
-    }
-
-    // Normálna rýchlosť / reset
-    if (/(normáln|normal|reset|vynul|normálne|normalne|pôvodn|povodn|späť|spat|naspäť|naspat)/i.test(lower)) {
-      setPlaybackRate(1);
-      seekTo(0);
-      return { reply: 'Vraciam všetko do normálu — rýchlosť na 1× a čas na 0:00. Čisto na začiatku.', action: 'reset' };
-    }
-
-    // Skok na začiatok
-    if (/(vynul|nula|začiatok|zaciatok|start|begin|skok na začiat|skok na zaciat|na začiatok|na zaciatok|späť na začiatok|spat na zaciatok)/i.test(lower)) {
-      seekTo(0);
-      return { reply: 'Vynulujem čas na 0:00. Playhead je na začiatku — môžeš hrať odznova.', action: 'seek' };
-    }
-
-    // Strih
-    if (/(strih|cut|rozrez|split|rozdel|rozrež|rozrez|vystrih|vystrihn|usekn)/i.test(lower)) {
-      handleCut();
-      return { reply: 'Strihám klip na aktuálnej pozícii prehrávania (čas ' + formatTime(currentTime) + '). Klip je rozdelený na dva diely.', action: 'cut' };
-    }
-
-    // Hudba
-    if (/(hudba|music|audio|pieseň|piessen|song|skladba|stopa|soundtrack|podkres|podkreslen)/i.test(lower)) {
-      setShowMusicModal(true);
-      return { reply: 'Otváram okno pre pridanie hudby. Vyber MP3, WAV alebo AAC súbor a ja ho pridám do projektu.', action: 'music' };
-    }
-
-    // Nerozumie / fallback — konverzačná odpoveď
-    if (/(nepamätám|nepamata|zabudol|zabudla|ako sa to robí|ako sa to robi|nevím|neviem|nechápem|nechapem|čo znamená|co znamena)/i.test(lower)) {
-      return { reply: 'To nevadí! Skús mi povedať, čo chceš s videom urobiť — normálne, ako by si povedal kamarátovi. Napríklad „chcem sem dať titulky" alebo „urob to krajšie". Ja si už poradím.' };
-    }
-
-    // Všeobecný fallback — konverzačný
-    return { reply: 'Rozumiem, čo hovoríš. Skús mi to povedať trochu inak — napríklad „chcem pridať titulky", „vylepši kvalitu", „zrýchli to", „daj sem intro", „stabilizuj video", „pridaj hudbu". Alebo sa ma opýtaj „čo vieš?" a ukážem ti všetky možnosti.' };
-  };
-
-  // ── Vykonanie akcie, ktorú vybral reálny AI model ──
-  const applyAiAction = (action?: string) => {
-    switch (action) {
-      case 'captions':
-      case 'enhance':
-      case 'denoise':
-      case 'stabilize':
-      case 'colorgrade':
-        runAITool(action);
-        break;
-      case 'transition':
-        if (timelineClips.length >= 2) setClipTransitions(prev => ({ ...prev, [1]: 'fade' }));
-        else setLeftTool('transitions');
-        break;
-      case 'speedup':   setPlaybackRate(2); break;
-      case 'slowdown':  setPlaybackRate(0.5); break;
-      case 'cut':       handleCut(); break;
-      case 'music':     setShowMusicModal(true); break;
-      case 'seek':      seekTo(0); break;
-      case 'reset':     setPlaybackRate(1); seekTo(0); setSliders({ jas: 50, kontrast: 50, sytost: 50 }); break;
-      case 'addmedia':  mediaInputRef.current?.click(); break;
-      case 'intro': {
-        const title = videoName ? videoName.replace(/\.[^.]+$/, '') : 'Moje Video';
-        const tpl = INTRO_TEMPLATES[introCount % INTRO_TEMPLATES.length];
-        setIntroOverlay({ title: title.toUpperCase(), subtitle: tpl.overlay.subtitle, bg: tpl.overlay.bg });
-        setIntroCount(c => c + 1);
-        setTimelineClips(prev => [{ id: Date.now(), label: tpl.label, duration: 3, color: tpl.color }, ...prev]);
-        break;
-      }
-      case 'outro':
-        setOutroOverlay({ title: 'ĎAKUJEM ZA SLEDOVANIE' });
-        setTimelineClips(prev => [...prev, { id: Date.now(), label: 'OUTRO', duration: 3, color: 'from-accent to-accent/70' }]);
-        break;
-      default:
-        break;
-    }
-  };
-
-  const sendChatMessage = async () => {
-    const text = chatInput.trim();
-    if (!text || chatThinking) return;
-    const history = [...chatMessages, { role: 'user' as const, text }];
-    setChatMessages(history);
-    setChatInput('');
-    setChatThinking(true);
-
-    const context = `klipov na časovej osi: ${timelineClips.length}, dĺžka: ${formatTime(duration)}, pozícia: ${formatTime(currentTime)}, rýchlosť: ${playbackRate}×, aplikované AI nástroje: ${[...appliedTools].join(', ') || 'žiadne'}`;
-
-    try {
-      const result = await chatWithEditorAI({
-        data: {
-          messages: history.slice(-12).map(m => ({ role: m.role, text: m.text })),
-          context,
-        },
-      });
-      applyAiAction(result.action);
-      setChatMessages(prev => [...prev, { role: 'ai', text: result.reply, action: result.action }]);
-    } catch {
-      // Záloha: lokálne rozpoznanie príkazov, keby AI služba nebola dostupná
-      const fallback = processAICommand(text);
-      setChatMessages(prev => [...prev, { role: 'ai', text: fallback.reply, action: fallback.action }]);
-    } finally {
-      setChatThinking(false);
-    }
-  };
 
 
   const panelTabs: { id: ActivePanel; label: string; icon: React.ElementType }[] = [
@@ -714,27 +512,8 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
             </div>
           ))}
 
-          {/* AI Chat button — prominent */}
-          <div className="my-1 w-full flex justify-center">
-            <div className="w-px h-4 bg-primary/15" />
-          </div>
-          <div className="relative group/tip">
-            <button onClick={() => setShowAIChat(true)} title="AI Asistent"
-              className="w-9 h-9 rounded-xl flex items-center justify-center transition-all bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white shadow-[0_0_15px_-3px_rgba(124,58,237,0.7)] hover:scale-110">
-              <Bot className="w-4 h-4" />
-            </button>
-            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green-400 border-2 border-card animate-pulse" />
-            <AnimatePresence>
-              {(tooltipTool as string) === 'ai-chat' && (
-                <motion.div initial={{ opacity: 0, x: -4 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} className="absolute left-full ml-2 top-1/2 -translate-y-1/2 z-50 pointer-events-none">
-                  <div className="bg-card border border-primary/20 rounded-lg px-2.5 py-1.5 shadow-xl whitespace-nowrap">
-                    <p className="text-xs font-semibold text-foreground">AI Asistent</p>
-                    <p className="text-[10px] text-muted-foreground">Napíš AI čo má urobiť s videom</p>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+
+
 
           <div className="mt-auto mb-1 relative group/tip">
             <button onClick={() => setShowMusicModal(true)} title="Pridať hudbu"
@@ -775,7 +554,7 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
                 {TRANSITIONS.map(t => {
                   const isActive = selectedGap !== null && clipTransitions[selectedGap] === t.id;
                   return (
-                    <button key={t.id} onClick={() => { if (selectedGap !== null) { setClipTransitions(prev => prev[selectedGap] === t.id ? Object.fromEntries(Object.entries(prev).filter(([k]) => Number(k) !== selectedGap)) : { ...prev, [selectedGap]: t.id }); } }}
+                    <button key={t.id} onClick={() => { playTransitionPreview(t.id); if (selectedGap !== null) { setClipTransitions(prev => prev[selectedGap] === t.id ? Object.fromEntries(Object.entries(prev).filter(([k]) => Number(k) !== selectedGap)) : { ...prev, [selectedGap]: t.id }); } }}
                       className={`flex flex-col items-center gap-1 p-1 rounded-lg border text-center transition-all ${isActive ? 'border-primary bg-primary/20 text-primary shadow-[0_0_8px_-2px_rgba(124,58,237,0.5)]' : 'border-primary/10 bg-card/60 hover:border-primary/40 hover:bg-primary/5 text-muted-foreground'}`} title={t.label}>
                       <TransitionPreview id={t.id} />
                       <span className="text-[7px] leading-tight w-full truncate">{t.label}</span>
@@ -827,12 +606,21 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
         <div className="flex-1 flex flex-col bg-black relative overflow-hidden min-w-0" onClick={leftTool === 'cut' ? handleCut : undefined} style={{ cursor: leftTool === 'cut' ? 'crosshair' : leftTool === 'crop' ? 'nwse-resize' : 'default' }}>
           <div className="flex-1 relative overflow-hidden min-h-0">
             {previewClip?.src ? (
-              previewClip.type === 'image'
-              ? <img key={previewClip.id} src={previewClip.src} className="w-full h-full object-contain" style={{ filter: videoFilter }} alt={previewClip.label} />
-              : <video key={previewClip.id} ref={videoRef} src={previewClip.src} className="w-full h-full object-contain" style={{ filter: videoFilter }} onTimeUpdate={handleTimeUpdate} onEnded={() => setIsPlaying(false)} muted={isMuted} />
+              <motion.div
+                key={playingTransition ? `tr-${playingTransition.key}` : 'media'}
+                className="absolute inset-0"
+                initial={playingTransition ? (TRANSITION_ANIM[playingTransition.id] ?? TRANSITION_ANIM.fade).initial : false}
+                animate={playingTransition ? (TRANSITION_ANIM[playingTransition.id] ?? TRANSITION_ANIM.fade).animate : { opacity: 1 }}
+                transition={{ duration: 0.7, ease: 'easeInOut' }}
+              >
+                {previewClip.type === 'image'
+                  ? <img key={previewClip.id} src={previewClip.src} className="w-full h-full object-contain" style={{ filter: videoFilter }} alt={previewClip.label} />
+                  : <video key={previewClip.id} ref={videoRef} src={previewClip.src} className="w-full h-full object-contain" style={{ filter: videoFilter }} onTimeUpdate={handleTimeUpdate} onEnded={() => setIsPlaying(false)} muted={isMuted} />}
+              </motion.div>
             ) : (
               <div className="w-full h-full flex items-center justify-center"><div className="text-center space-y-3 opacity-40"><Film className="w-20 h-20 mx-auto text-primary/40" /><p className="text-muted-foreground text-sm">Žiadne video nevybrané</p></div></div>
             )}
+
 
             <AnimatePresence>
               {appliedTools.has('captions') && (
@@ -965,7 +753,7 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
                   {activePanel === 'ai' && (
                     <motion.div key="ai" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} className="space-y-2">
                       <div className="flex items-center gap-2 mb-3"><Sparkles className="w-4 h-4 text-primary" /><p className="text-xs font-bold text-foreground">AI Nástroje</p></div>
-                      <p className="text-[10px] text-muted-foreground -mt-2 mb-3 leading-relaxed">Klikni na nástroj — AI ho aplikuje automaticky. Alebo klikni na <Bot className="inline w-3 h-3 text-primary" /> v ľavom paneli a napíš AI priamo.</p>
+                      <p className="text-[10px] text-muted-foreground -mt-2 mb-3 leading-relaxed">Klikni na nástroj — AI ho aplikuje automaticky.</p>
                       {AI_TOOLS.map(({ id, label, icon: Icon, desc, detail }) => {
                         const isApplied = appliedTools.has(id); const isRunning = activeTool === id; const pct = toolProgress[id] ?? 0;
                         return (
@@ -1236,88 +1024,8 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
         )}
       </AnimatePresence>
 
-      {/* ── AI Chat Panel ── */}
-      <AnimatePresence>
-        {showAIChat && (
-          <>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40" onClick={() => setShowAIChat(false)} />
-            <motion.div
-              initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }} transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-              className="fixed left-0 top-0 bottom-0 w-[85vw] max-w-sm z-50 bg-card border-r border-primary/20 flex flex-col shadow-[12px_0_60px_-10px_rgba(0,0,0,0.7)]"
-              onClick={(e) => e.stopPropagation()}
-              onMouseDown={(e) => e.stopPropagation()}
-              onTouchStart={(e) => e.stopPropagation()}
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between p-3 border-b border-primary/10 shrink-0 bg-gradient-to-r from-violet-600/20 to-fuchsia-600/20">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-600 to-fuchsia-600 flex items-center justify-center shadow-[0_0_15px_-3px_rgba(124,58,237,0.7)]">
-                    <Bot className="w-4 h-4 text-white" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold">AI Asistent</p>
-                    <p className="text-[10px] text-green-400 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />Online</p>
-                  </div>
-                </div>
-                <button onClick={() => setShowAIChat(false)} className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-primary/10 rounded-lg transition-all"><X className="w-4 h-4" /></button>
-              </div>
 
-              {/* Messages */}
-              <div ref={chatScrollRef} className="flex-1 overflow-y-auto p-3 space-y-2.5">
-                {chatMessages.map((msg, i) => (
-                  <motion.div key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
-                    className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[85%] px-3 py-2 rounded-2xl text-xs leading-relaxed ${
-                      msg.role === 'user'
-                        ? 'bg-primary text-primary-foreground rounded-br-sm'
-                        : 'bg-card border border-primary/15 text-foreground rounded-bl-sm'
-                    }`}>
-                      {msg.role === 'ai' && <Bot className="inline w-3 h-3 text-primary mr-1 mb-0.5" />}
-                      {msg.text}
-                      {msg.action && <span className="block mt-1 text-[9px] text-primary/60 italic">✓ Akcia aplikovaná</span>}
-                    </div>
-                  </motion.div>
-                ))}
-                {chatThinking && (
-                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start">
-                    <div className="bg-card border border-primary/15 px-3 py-2 rounded-2xl rounded-bl-sm flex items-center gap-1.5">
-                      <Bot className="w-3 h-3 text-primary" />
-                      {[0,1,2].map(i => <motion.div key={i} animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }} className="w-1 h-1 bg-primary rounded-full" />)}
-                    </div>
-                  </motion.div>
-                )}
-              </div>
 
-              {/* Quick suggestions */}
-              <div className="px-3 pb-1.5 flex gap-1.5 flex-wrap shrink-0">
-                {['Pridaj titulky', 'Vylepši kvalitu', 'Zrýchli', 'Vynuluj čas'].map(s => (
-                  <button key={s} onClick={() => { setChatInput(s); }} className="text-[9px] px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 transition-all whitespace-nowrap">{s}</button>
-                ))}
-              </div>
-
-              {/* Input */}
-              <form onSubmit={(e) => { e.preventDefault(); sendChatMessage(); }} className="p-3 border-t border-primary/10 shrink-0 flex items-center gap-2">
-                <input
-                  ref={chatInputRef}
-                  type="text"
-                  inputMode="text"
-                  autoCapitalize="sentences"
-                  autoComplete="off"
-                  value={chatInput}
-                  onChange={e => setChatInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); } }}
-                  placeholder="Napíš mi, čo chceš urobiť…"
-                  className="flex-1 bg-background border border-primary/20 rounded-xl px-3 py-2.5 text-xs focus:outline-none focus:border-primary/60 placeholder:text-muted-foreground/50 text-foreground"
-                />
-                <button type="submit" disabled={!chatInput.trim() || chatThinking}
-                  className="w-9 h-9 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground flex items-center justify-center transition-all hover:scale-105 disabled:opacity-40 disabled:hover:scale-100 shrink-0">
-                  <Send className="w-4 h-4" />
-                </button>
-              </form>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
     </motion.div>
   );
 }
