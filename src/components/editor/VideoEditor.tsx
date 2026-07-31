@@ -187,15 +187,18 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   // Klip, ktorý je práve pod prehrávacou hlavou (určuje veľkú ukážku)
-  const { activeClip, activeClipStart } = useMemo(() => {
+  const { activeClip, activeClipStart, activeClipIndex } = useMemo(() => {
     let cum = 0;
-    for (const c of timelineClips) {
-      if (currentTime >= cum && currentTime < cum + c.duration) return { activeClip: c, activeClipStart: cum };
+    for (let i = 0; i < timelineClips.length; i++) {
+      const c = timelineClips[i];
+      if (currentTime >= cum && currentTime < cum + c.duration) return { activeClip: c, activeClipStart: cum, activeClipIndex: i };
       cum += c.duration;
     }
     const last = timelineClips[timelineClips.length - 1];
-    return { activeClip: last ?? null, activeClipStart: Math.max(0, cum - (last?.duration ?? 0)) };
+    return { activeClip: last ?? null, activeClipStart: Math.max(0, cum - (last?.duration ?? 0)), activeClipIndex: Math.max(0, timelineClips.length - 1) };
   }, [timelineClips, currentTime]);
+  const prevClipIndexRef = useRef(activeClipIndex);
+
 
   const previewClip = activeClip && activeClip.src ? activeClip : (timelineClips.find(c => c.src) ?? null);
 
