@@ -1095,8 +1095,6 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
 
           <div className="w-8 shrink-0 flex flex-col border-l border-primary/5">
             <div className="h-4" />
-            <input ref={musicInputRef} type="file" accept="video/*,image/*" className="hidden"
-              onChange={e => { const file = e.target.files?.[0]; if (!file) return; const img = file.type.startsWith('image/'); const url = URL.createObjectURL(file); setTimelineClips(prev => [...prev, { id: Date.now(), label: img ? `Foto ${prev.filter(c => c.type === 'image').length + 1}` : `Klip ${prev.length + 2}`, color: CLIP_COLORS[prev.length % CLIP_COLORS.length], duration: 30, type: img ? 'image' : 'video', thumbUrl: img ? url : undefined }]); e.target.value = ''; }} />
             <button onClick={() => mediaInputRef.current?.click()} title="Pridať klip" className="h-16 w-full flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all"><Plus className="w-3.5 h-3.5" /></button>
             {appliedTools.has('captions') && <div className="h-7" />}
             <button onClick={() => setShowMusicModal(true)} title="Pridať hudbu" className="h-10 w-full flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all"><Plus className="w-3.5 h-3.5" /></button>
