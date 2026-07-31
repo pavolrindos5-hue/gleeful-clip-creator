@@ -147,7 +147,6 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
   }]);
 
   const videoRef      = useRef<HTMLVideoElement>(null);
-  const musicInputRef = useRef<HTMLInputElement>(null);
   const mediaInputRef = useRef<HTMLInputElement>(null);
   const musicAudioRef = useRef<HTMLInputElement>(null);
   const timelineTrackRef = useRef<HTMLDivElement>(null);
