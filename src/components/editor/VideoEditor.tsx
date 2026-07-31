@@ -761,7 +761,7 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
         <AnimatePresence>
           {leftTool === 'transitions' && (
             <motion.div initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }} transition={{ duration: 0.18 }}
-              className="absolute left-11 top-0 z-30 w-56 bg-card border border-primary/20 rounded-r-xl rounded-b-xl shadow-2xl p-3 overflow-y-auto max-h-[70vh]">
+              className="absolute left-11 top-0 z-30 w-64 bg-card border border-primary/20 rounded-r-xl rounded-b-xl shadow-2xl p-3 overflow-y-auto max-h-[75vh]">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Prechody</p>
                 <button onClick={() => setLeftTool('select')} className="text-muted-foreground hover:text-foreground p-0.5"><X className="w-3.5 h-3.5" /></button>
@@ -771,18 +771,19 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
               ) : (
                 <p className="text-[9px] text-green-400/80 bg-green-400/5 border border-green-400/15 rounded-lg px-2 py-1.5 mb-2">Prechod pred klipom <span className="font-bold">{selectedGap + 1}</span></p>
               )}
-              <div className="grid grid-cols-4 gap-1">
+              <div className="grid grid-cols-3 gap-1.5">
                 {TRANSITIONS.map(t => {
                   const isActive = selectedGap !== null && clipTransitions[selectedGap] === t.id;
                   return (
                     <button key={t.id} onClick={() => { if (selectedGap !== null) { setClipTransitions(prev => prev[selectedGap] === t.id ? Object.fromEntries(Object.entries(prev).filter(([k]) => Number(k) !== selectedGap)) : { ...prev, [selectedGap]: t.id }); } }}
-                      className={`flex flex-col items-center gap-0.5 p-1.5 rounded-lg border text-center transition-all ${isActive ? 'border-primary bg-primary/20 text-primary shadow-[0_0_8px_-2px_rgba(124,58,237,0.5)]' : 'border-primary/10 bg-card/60 hover:border-primary/40 hover:bg-primary/5 text-muted-foreground'}`} title={t.label}>
-                      <span className="text-sm leading-none">{t.emoji}</span>
-                      <span className="text-[7px] leading-tight mt-0.5 w-full truncate">{t.label}</span>
+                      className={`flex flex-col items-center gap-1 p-1 rounded-lg border text-center transition-all ${isActive ? 'border-primary bg-primary/20 text-primary shadow-[0_0_8px_-2px_rgba(124,58,237,0.5)]' : 'border-primary/10 bg-card/60 hover:border-primary/40 hover:bg-primary/5 text-muted-foreground'}`} title={t.label}>
+                      <TransitionPreview id={t.id} />
+                      <span className="text-[7px] leading-tight w-full truncate">{t.label}</span>
                     </button>
                   );
                 })}
               </div>
+
             </motion.div>
           )}
         </AnimatePresence>
