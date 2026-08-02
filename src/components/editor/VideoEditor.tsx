@@ -308,7 +308,36 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
     }
   }, [duration, timelineClips]);
 
+  // ── Automatické posúvanie časovej osi pri ťahaní k okraju ──
+  const autoScrollRaf = useRef<number | null>(null);
+  const autoScrollX = useRef(0);
+
+  const stopEdgeAutoScroll = useCallback(() => {
+    if (autoScrollRaf.current !== null) { cancelAnimationFrame(autoScrollRaf.current); autoScrollRaf.current = null; }
+  }, []);
+
+  const edgeAutoScroll = useCallback((clientX: number) => {
+    autoScrollX.current = clientX;
+    if (autoScrollRaf.current !== null) return;
+    const EDGE = 60, MAX_SPEED = 18;
+    const step = () => {
+      const el = timelineScrollRef.current;
+      if (!el) { autoScrollRaf.current = null; return; }
+      const rect = el.getBoundingClientRect();
+      const x = autoScrollX.current;
+      let dx = 0;
+      if (x < rect.left + EDGE) dx = -MAX_SPEED * Math.min(1, (rect.left + EDGE - x) / EDGE);
+      else if (x > rect.right - EDGE) dx = MAX_SPEED * Math.min(1, (x - (rect.right - EDGE)) / EDGE);
+      if (dx !== 0) el.scrollLeft += dx;
+      autoScrollRaf.current = requestAnimationFrame(step);
+    };
+    autoScrollRaf.current = requestAnimationFrame(step);
+  }, []);
+
+  useEffect(() => stopEdgeAutoScroll, [stopEdgeAutoScroll]);
+
   // ── Draggable playhead ──
+
   const handlePlayheadMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
