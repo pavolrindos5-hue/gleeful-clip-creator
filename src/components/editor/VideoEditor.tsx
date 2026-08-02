@@ -308,7 +308,36 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
     }
   }, [duration, timelineClips]);
 
+  // ── Automatické posúvanie časovej osi pri ťahaní k okraju ──
+  const autoScrollRaf = useRef<number | null>(null);
+  const autoScrollX = useRef(0);
+
+  const stopEdgeAutoScroll = useCallback(() => {
+    if (autoScrollRaf.current !== null) { cancelAnimationFrame(autoScrollRaf.current); autoScrollRaf.current = null; }
+  }, []);
+
+  const edgeAutoScroll = useCallback((clientX: number) => {
+    autoScrollX.current = clientX;
+    if (autoScrollRaf.current !== null) return;
+    const EDGE = 60, MAX_SPEED = 18;
+    const step = () => {
+      const el = timelineScrollRef.current;
+      if (!el) { autoScrollRaf.current = null; return; }
+      const rect = el.getBoundingClientRect();
+      const x = autoScrollX.current;
+      let dx = 0;
+      if (x < rect.left + EDGE) dx = -MAX_SPEED * Math.min(1, (rect.left + EDGE - x) / EDGE);
+      else if (x > rect.right - EDGE) dx = MAX_SPEED * Math.min(1, (x - (rect.right - EDGE)) / EDGE);
+      if (dx !== 0) el.scrollLeft += dx;
+      autoScrollRaf.current = requestAnimationFrame(step);
+    };
+    autoScrollRaf.current = requestAnimationFrame(step);
+  }, []);
+
+  useEffect(() => stopEdgeAutoScroll, [stopEdgeAutoScroll]);
+
   // ── Draggable playhead ──
+
   const handlePlayheadMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -326,15 +355,16 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
 
     updateFromX(e.clientX);
 
-    const onMove = (ev: MouseEvent) => updateFromX(ev.clientX);
+    const onMove = (ev: MouseEvent) => { updateFromX(ev.clientX); edgeAutoScroll(ev.clientX); };
     const onUp = () => {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
+      stopEdgeAutoScroll();
       setIsScrubbing(false);
     };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
-  }, [duration, seekTo, isPlaying]);
+  }, [duration, seekTo, isPlaying, edgeAutoScroll, stopEdgeAutoScroll]);
 
   const handleTimelineTrackClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -378,10 +408,11 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
     e.stopPropagation();
     const startX = e.clientX;
     let didDrag = false;
-    const onMove = (ev: MouseEvent) => { if (!didDrag && Math.abs(ev.clientX - startX) > 6) didDrag = true; if (didDrag) setDragState({ clipId, startX, currentX: ev.clientX }); };
+    const onMove = (ev: MouseEvent) => { if (!didDrag && Math.abs(ev.clientX - startX) > 6) didDrag = true; if (didDrag) { setDragState({ clipId, startX, currentX: ev.clientX }); edgeAutoScroll(ev.clientX); } };
     const onUp = (ev: MouseEvent) => {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
+      stopEdgeAutoScroll();
       if (didDrag) {
         const track = timelineTrackRef.current;
         if (track) {
@@ -416,8 +447,9 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
     const onMove = (ev: MouseEvent) => {
       const delta = (ev.clientX - startX) / (PX_PER_SEC * timelineZoom);
       setTimelineClips(prev => prev.map(c => c.id === clipId ? { ...c, duration: Math.max(1, startDur + delta) } : c));
+      edgeAutoScroll(ev.clientX);
     };
-    const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+    const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); stopEdgeAutoScroll(); };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
   };
@@ -429,11 +461,13 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
     const onMove = (ev: MouseEvent) => {
       const delta = (ev.clientX - startX) / (PX_PER_SEC * timelineZoom);
       setTimelineClips(prev => prev.map(c => c.id === clipId ? { ...c, duration: Math.max(1, startDur - delta) } : c));
+      edgeAutoScroll(ev.clientX);
     };
-    const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+    const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); stopEdgeAutoScroll(); };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
   };
+
 
   const formatTime = (s: number) => { const m = Math.floor(s / 60); const sec = Math.floor(s % 60); return `${m}:${sec.toString().padStart(2, '0')}`; };
 
