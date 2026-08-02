@@ -437,7 +437,17 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
 
   const formatTime = (s: number) => { const m = Math.floor(s / 60); const sec = Math.floor(s % 60); return `${m}:${sec.toString().padStart(2, '0')}`; };
 
+  // Po pridaní nového klipu posunieme časovú os na koniec, aby bol viditeľný
+  useEffect(() => {
+    const el = timelineScrollRef.current;
+    if (el && timelineClips.length > prevClipCountRef.current) {
+      requestAnimationFrame(() => { el.scrollTo({ left: el.scrollWidth, behavior: 'smooth' }); });
+    }
+    prevClipCountRef.current = timelineClips.length;
+  }, [timelineClips.length]);
+
   const videoFilter = useMemo(() => {
+
     const filters: string[] = [];
     // Manuálne posuvníky (50 = neutrálna hodnota)
     if (sliders.jas !== 50)      filters.push(`brightness(${(sliders.jas / 50).toFixed(2)})`);
