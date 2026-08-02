@@ -408,10 +408,11 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
     e.stopPropagation();
     const startX = e.clientX;
     let didDrag = false;
-    const onMove = (ev: MouseEvent) => { if (!didDrag && Math.abs(ev.clientX - startX) > 6) didDrag = true; if (didDrag) setDragState({ clipId, startX, currentX: ev.clientX }); };
+    const onMove = (ev: MouseEvent) => { if (!didDrag && Math.abs(ev.clientX - startX) > 6) didDrag = true; if (didDrag) { setDragState({ clipId, startX, currentX: ev.clientX }); edgeAutoScroll(ev.clientX); } };
     const onUp = (ev: MouseEvent) => {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
+      stopEdgeAutoScroll();
       if (didDrag) {
         const track = timelineTrackRef.current;
         if (track) {
