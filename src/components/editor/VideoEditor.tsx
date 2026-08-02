@@ -355,15 +355,16 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
 
     updateFromX(e.clientX);
 
-    const onMove = (ev: MouseEvent) => updateFromX(ev.clientX);
+    const onMove = (ev: MouseEvent) => { updateFromX(ev.clientX); edgeAutoScroll(ev.clientX); };
     const onUp = () => {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
+      stopEdgeAutoScroll();
       setIsScrubbing(false);
     };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
-  }, [duration, seekTo, isPlaying]);
+  }, [duration, seekTo, isPlaying, edgeAutoScroll, stopEdgeAutoScroll]);
 
   const handleTimelineTrackClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
