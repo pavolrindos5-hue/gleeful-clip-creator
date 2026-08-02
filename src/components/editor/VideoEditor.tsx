@@ -311,15 +311,18 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
   // ── Automatické posúvanie časovej osi pri ťahaní k okraju ──
   const autoScrollRaf = useRef<number | null>(null);
   const autoScrollX = useRef(0);
+  const autoScrollTick = useRef<((clientX: number) => void) | null>(null);
 
   const stopEdgeAutoScroll = useCallback(() => {
     if (autoScrollRaf.current !== null) { cancelAnimationFrame(autoScrollRaf.current); autoScrollRaf.current = null; }
+    autoScrollTick.current = null;
   }, []);
 
-  const edgeAutoScroll = useCallback((clientX: number) => {
+  const edgeAutoScroll = useCallback((clientX: number, onTick?: (clientX: number) => void) => {
     autoScrollX.current = clientX;
+    if (onTick) autoScrollTick.current = onTick;
     if (autoScrollRaf.current !== null) return;
-    const EDGE = 60, MAX_SPEED = 18;
+    const EDGE = 70, MAX_SPEED = 22;
     const step = () => {
       const el = timelineScrollRef.current;
       if (!el) { autoScrollRaf.current = null; return; }
@@ -328,13 +331,19 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
       let dx = 0;
       if (x < rect.left + EDGE) dx = -MAX_SPEED * Math.min(1, (rect.left + EDGE - x) / EDGE);
       else if (x > rect.right - EDGE) dx = MAX_SPEED * Math.min(1, (x - (rect.right - EDGE)) / EDGE);
-      if (dx !== 0) el.scrollLeft += dx;
+      if (dx !== 0) {
+        const before = el.scrollLeft;
+        el.scrollLeft = Math.max(0, Math.min(el.scrollWidth - el.clientWidth, before + dx));
+        // aj keď myš stojí na okraji, pokračujeme v úprave (playhead / trim / drag)
+        if (el.scrollLeft !== before) autoScrollTick.current?.(x);
+      }
       autoScrollRaf.current = requestAnimationFrame(step);
     };
     autoScrollRaf.current = requestAnimationFrame(step);
   }, []);
 
   useEffect(() => stopEdgeAutoScroll, [stopEdgeAutoScroll]);
+
 
   // ── Draggable playhead ──
 
@@ -355,7 +364,7 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
 
     updateFromX(e.clientX);
 
-    const onMove = (ev: MouseEvent) => { updateFromX(ev.clientX); edgeAutoScroll(ev.clientX); };
+    const onMove = (ev: MouseEvent) => { updateFromX(ev.clientX); edgeAutoScroll(ev.clientX, updateFromX); };
     const onUp = () => {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
@@ -408,7 +417,7 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
     e.stopPropagation();
     const startX = e.clientX;
     let didDrag = false;
-    const onMove = (ev: MouseEvent) => { if (!didDrag && Math.abs(ev.clientX - startX) > 6) didDrag = true; if (didDrag) { setDragState({ clipId, startX, currentX: ev.clientX }); edgeAutoScroll(ev.clientX); } };
+    const onMove = (ev: MouseEvent) => { if (!didDrag && Math.abs(ev.clientX - startX) > 6) didDrag = true; if (didDrag) { const upd = (x: number) => setDragState({ clipId, startX, currentX: x }); upd(ev.clientX); edgeAutoScroll(ev.clientX, upd); } };
     const onUp = (ev: MouseEvent) => {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
@@ -445,9 +454,12 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
     const startX = e.clientX;
     const startDur = timelineClips.find(c => c.id === clipId)!.duration;
     const onMove = (ev: MouseEvent) => {
-      const delta = (ev.clientX - startX) / (PX_PER_SEC * timelineZoom);
-      setTimelineClips(prev => prev.map(c => c.id === clipId ? { ...c, duration: Math.max(1, startDur + delta) } : c));
-      edgeAutoScroll(ev.clientX);
+      const upd = (x: number) => {
+        const delta = (x - startX) / (PX_PER_SEC * timelineZoom);
+        setTimelineClips(prev => prev.map(c => c.id === clipId ? { ...c, duration: Math.max(1, startDur + delta) } : c));
+      };
+      upd(ev.clientX);
+      edgeAutoScroll(ev.clientX, upd);
     };
     const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); stopEdgeAutoScroll(); };
     window.addEventListener('mousemove', onMove);
@@ -459,9 +471,12 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
     const startX = e.clientX;
     const startDur = timelineClips.find(c => c.id === clipId)!.duration;
     const onMove = (ev: MouseEvent) => {
-      const delta = (ev.clientX - startX) / (PX_PER_SEC * timelineZoom);
-      setTimelineClips(prev => prev.map(c => c.id === clipId ? { ...c, duration: Math.max(1, startDur - delta) } : c));
-      edgeAutoScroll(ev.clientX);
+      const upd = (x: number) => {
+        const delta = (x - startX) / (PX_PER_SEC * timelineZoom);
+        setTimelineClips(prev => prev.map(c => c.id === clipId ? { ...c, duration: Math.max(1, startDur - delta) } : c));
+      };
+      upd(ev.clientX);
+      edgeAutoScroll(ev.clientX, upd);
     };
     const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); stopEdgeAutoScroll(); };
     window.addEventListener('mousemove', onMove);
