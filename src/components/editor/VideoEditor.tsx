@@ -447,8 +447,9 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
     const onMove = (ev: MouseEvent) => {
       const delta = (ev.clientX - startX) / (PX_PER_SEC * timelineZoom);
       setTimelineClips(prev => prev.map(c => c.id === clipId ? { ...c, duration: Math.max(1, startDur + delta) } : c));
+      edgeAutoScroll(ev.clientX);
     };
-    const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+    const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); stopEdgeAutoScroll(); };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
   };
@@ -460,11 +461,13 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
     const onMove = (ev: MouseEvent) => {
       const delta = (ev.clientX - startX) / (PX_PER_SEC * timelineZoom);
       setTimelineClips(prev => prev.map(c => c.id === clipId ? { ...c, duration: Math.max(1, startDur - delta) } : c));
+      edgeAutoScroll(ev.clientX);
     };
-    const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+    const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); stopEdgeAutoScroll(); };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
   };
+
 
   const formatTime = (s: number) => { const m = Math.floor(s / 60); const sec = Math.floor(s % 60); return `${m}:${sec.toString().padStart(2, '0')}`; };
 
