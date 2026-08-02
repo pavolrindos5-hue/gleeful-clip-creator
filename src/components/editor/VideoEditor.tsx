@@ -838,18 +838,19 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
             <div className="h-10" />
           </div>
 
-          <div className="flex-1 overflow-x-auto overflow-y-hidden">
+          <div ref={timelineScrollRef} className="flex-1 overflow-x-auto overflow-y-hidden">
             {(() => {
               const totalClipW = timelineClips.reduce((s, c) => s + Math.round(c.duration * PX_PER_SEC * timelineZoom), 0);
               const numGaps = Math.max(0, timelineClips.length - 1);
-              const contentW = totalClipW + numGaps * GAP_W + 16;
+              const contentW = totalClipW + numGaps * GAP_W + 56 + 24;
               const totalDur = timelineClips.reduce((s, c) => s + c.duration, 0);
               const rulerStep = timelineZoom >= 2 ? 2 : timelineZoom >= 1 ? 5 : 10;
               const numTicks = Math.ceil(totalDur / rulerStep) + 2;
               const playheadX = (progress / 100) * totalClipW;
 
               return (
-                <div style={{ width: Math.max(contentW, 100) }} className="relative">
+                <div style={{ width: Math.max(contentW, 100), minWidth: '100%' }} className="relative">
+
                   {/* Draggable playhead — spans full height */}
                   <div
                     className="absolute top-0 bottom-0 w-0.5 bg-white/90 shadow-[0_0_10px_rgba(255,255,255,0.8)] z-40 cursor-ew-resize group/ph"
