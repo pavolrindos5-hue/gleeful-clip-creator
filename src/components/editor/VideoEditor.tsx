@@ -179,6 +179,9 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
   const mediaInputRef = useRef<HTMLInputElement>(null);
   const musicAudioRef = useRef<HTMLInputElement>(null);
   const timelineTrackRef = useRef<HTMLDivElement>(null);
+  const timelineScrollRef = useRef<HTMLDivElement>(null);
+  const prevClipCountRef = useRef(0);
+
 
   const totalDuration = timelineClips.reduce((s, c) => s + c.duration, 0);
   const duration = totalDuration;
