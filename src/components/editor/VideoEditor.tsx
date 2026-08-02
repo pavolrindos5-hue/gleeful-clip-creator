@@ -179,6 +179,9 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
   const mediaInputRef = useRef<HTMLInputElement>(null);
   const musicAudioRef = useRef<HTMLInputElement>(null);
   const timelineTrackRef = useRef<HTMLDivElement>(null);
+  const timelineScrollRef = useRef<HTMLDivElement>(null);
+  const prevClipCountRef = useRef(0);
+
 
   const totalDuration = timelineClips.reduce((s, c) => s + c.duration, 0);
   const duration = totalDuration;
@@ -434,7 +437,17 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
 
   const formatTime = (s: number) => { const m = Math.floor(s / 60); const sec = Math.floor(s % 60); return `${m}:${sec.toString().padStart(2, '0')}`; };
 
+  // Po pridaní nového klipu posunieme časovú os na koniec, aby bol viditeľný
+  useEffect(() => {
+    const el = timelineScrollRef.current;
+    if (el && timelineClips.length > prevClipCountRef.current) {
+      requestAnimationFrame(() => { el.scrollTo({ left: el.scrollWidth, behavior: 'smooth' }); });
+    }
+    prevClipCountRef.current = timelineClips.length;
+  }, [timelineClips.length]);
+
   const videoFilter = useMemo(() => {
+
     const filters: string[] = [];
     // Manuálne posuvníky (50 = neutrálna hodnota)
     if (sliders.jas !== 50)      filters.push(`brightness(${(sliders.jas / 50).toFixed(2)})`);
@@ -838,18 +851,19 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
             <div className="h-10" />
           </div>
 
-          <div className="flex-1 overflow-x-auto overflow-y-hidden">
+          <div ref={timelineScrollRef} className="flex-1 overflow-x-auto overflow-y-hidden">
             {(() => {
               const totalClipW = timelineClips.reduce((s, c) => s + Math.round(c.duration * PX_PER_SEC * timelineZoom), 0);
               const numGaps = Math.max(0, timelineClips.length - 1);
-              const contentW = totalClipW + numGaps * GAP_W + 16;
+              const contentW = totalClipW + numGaps * GAP_W + 56 + 24;
               const totalDur = timelineClips.reduce((s, c) => s + c.duration, 0);
               const rulerStep = timelineZoom >= 2 ? 2 : timelineZoom >= 1 ? 5 : 10;
               const numTicks = Math.ceil(totalDur / rulerStep) + 2;
               const playheadX = (progress / 100) * totalClipW;
 
               return (
-                <div style={{ width: Math.max(contentW, 100) }} className="relative">
+                <div style={{ width: Math.max(contentW, 100), minWidth: '100%' }} className="relative">
+
                   {/* Draggable playhead — spans full height */}
                   <div
                     className="absolute top-0 bottom-0 w-0.5 bg-white/90 shadow-[0_0_10px_rgba(255,255,255,0.8)] z-40 cursor-ew-resize group/ph"
