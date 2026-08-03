@@ -95,6 +95,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
     ],
+    scripts: [
+      { src: "https://www.googletagmanager.com/gtag/js?id=G-W3ENZCXYD6", async: true },
+      {
+        children:
+          "window.dataLayer = window.dataLayer || [];function gtag(){dataLayer.push(arguments);}gtag('js', new Date());gtag('config', 'G-W3ENZCXYD6');",
+      },
+    ],
   }),
   shellComponent: RootShell,
   component: RootComponent,

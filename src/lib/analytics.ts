@@ -12,19 +12,10 @@ export function gtag(...args: unknown[]) {
   window.dataLayer.push(args);
 }
 
-let initialized = false;
-
+// gtag.js sa načítava priamo v <head> (src/routes/__root.tsx)
 export function initAnalytics() {
-  if (typeof window === "undefined" || initialized) return;
-  initialized = true;
-
-  const script = document.createElement("script");
-  script.async = true;
-  script.src = `https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`;
-  document.head.appendChild(script);
-
-  gtag("js", new Date());
-  gtag("config", GA_MEASUREMENT_ID, { send_page_view: true });
+  if (typeof window === "undefined") return;
+  window.dataLayer = window.dataLayer || [];
 }
 
 export function trackPageView(path: string) {
