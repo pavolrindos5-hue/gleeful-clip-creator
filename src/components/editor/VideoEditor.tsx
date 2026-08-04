@@ -574,10 +574,12 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
               </span>
             ) : null; })}
           </div>
-          <button onClick={() => { if (videoUrl) { const a = document.createElement('a'); a.href = videoUrl; a.download = videoName || 'export.mp4'; a.click(); } else alert('Najprv nahraj video'); }}
-            className="flex items-center gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold px-3 py-2 rounded-xl transition-all hover:scale-105 shadow-[0_0_20px_-5px_rgba(124,58,237,0.6)]">
-            <Download className="w-3.5 h-3.5" /><span>Exportovať</span>
+          <button onClick={handleExport} disabled={exporting}
+            className="flex items-center gap-1.5 bg-primary hover:bg-primary/90 disabled:opacity-70 text-primary-foreground text-xs font-bold px-3 py-2 rounded-xl transition-all hover:scale-105 shadow-[0_0_20px_-5px_rgba(124,58,237,0.6)]">
+            <Download className={`w-3.5 h-3.5 ${exporting ? 'animate-pulse' : ''}`} />
+            <span>{exporting ? `Exportujem ${exportPct}%` : 'Exportovať'}</span>
           </button>
+
         </div>
       </div>
 
