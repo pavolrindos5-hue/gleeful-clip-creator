@@ -508,6 +508,37 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
     return filters.join(' ') || undefined;
   }, [appliedTools, sliders]);
 
+  // ── Reálny export videa (canvas + MediaRecorder) ──
+  const [exporting, setExporting] = useState(false);
+  const [exportPct, setExportPct] = useState(0);
+
+  const handleExport = useCallback(async () => {
+    if (exporting) return;
+    const clips = timelineClips.filter(c => c.src);
+    if (!clips.length) { alert('Najprv nahraj video alebo obrázok.'); return; }
+    setExporting(true);
+    setExportPct(0);
+    try {
+      setIsPlaying(false);
+      const { exportTimeline, downloadBlob } = await import('@/lib/video-export');
+      const { blob, ext } = await exportTimeline({
+        clips: clips.map(c => ({ src: c.src, type: c.type, duration: c.duration })),
+        filter: videoFilter,
+        onProgress: setExportPct,
+      });
+      const base = (videoName || 'export').replace(/\.[^/.]+$/, '');
+      downloadBlob(blob, `${base}-export.${ext}`);
+    } catch (err) {
+      console.error(err);
+      alert(err instanceof Error ? err.message : 'Export zlyhal.');
+    } finally {
+      setExporting(false);
+      setExportPct(0);
+    }
+  }, [exporting, timelineClips, videoFilter, videoName]);
+
+
+
 
 
 
