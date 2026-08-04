@@ -375,7 +375,7 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
     window.addEventListener('pointerup', onUp); window.addEventListener('pointercancel', onUp);
   }, [duration, seekTo, isPlaying, edgeAutoScroll, stopEdgeAutoScroll]);
 
-  const handleTimelineTrackClick = (e: React.PointerEvent<HTMLDivElement>) => {
+  const handleTimelineTrackClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     seekTo(pct * duration);
@@ -949,7 +949,7 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
                   {/* Draggable playhead — spans full height */}
                   <div
                     className="absolute top-0 bottom-0 w-0.5 bg-white/90 shadow-[0_0_10px_rgba(255,255,255,0.8)] z-40 cursor-ew-resize group/ph"
-                    style={{ left: playheadX }}
+                    style={{ left: playheadX, touchAction: 'none' }}
                     onPointerDown={handlePlayheadPointerDown}
                   >
                     {/* Grab handle at top — always visible */}
@@ -996,7 +996,7 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
                       parts.push(
                         <div key={clip.id} onPointerDown={e => { if (!(e.target as HTMLElement).dataset.handle) handleClipPointerDown(clip.id, e); }} onClick={e => e.stopPropagation()}
                           className={`relative shrink-0 h-full cursor-grab active:cursor-grabbing transition-all ${isDrag ? 'opacity-60 ring-2 ring-primary ring-inset' : isSel ? 'ring-2 ring-amber-400 ring-inset brightness-110' : 'hover:brightness-110'}`}
-                          style={{ width: clipPx }}>
+                          style={{ width: clipPx, touchAction: 'none' }}>
                           {clip.thumbUrl ? <img src={clip.thumbUrl} className="w-full h-full object-cover pointer-events-none" alt="" />
                           : <div className={`w-full h-full bg-gradient-to-r ${clip.color} flex items-center justify-center`}><Film className="w-5 h-5 text-white/20 pointer-events-none" /></div>}
                           <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-1.5 pb-1 pointer-events-none"><span className="text-[8px] text-white font-semibold truncate block">{clip.label}</span></div>
@@ -1012,10 +1012,10 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
                               <Trash2 className="w-3 h-3" />
                             </button>
                           )}
-                          <div data-handle="trim-start" onPointerDown={e => { e.stopPropagation(); handleTrimStart(clip.id, e); }} className={`absolute left-0 top-0 bottom-0 w-4 cursor-ew-resize z-20 flex items-center justify-center group/trim transition-all ${isSel ? 'bg-amber-400/90' : 'bg-amber-400/0 hover:bg-amber-400/40'}`}>
+                          <div data-handle="trim-start" style={{ touchAction: 'none' }} onPointerDown={e => { e.stopPropagation(); handleTrimStart(clip.id, e); }} className={`absolute left-0 top-0 bottom-0 w-6 cursor-ew-resize z-20 flex items-center justify-center group/trim transition-all ${isSel ? 'bg-amber-400/90' : 'bg-amber-400/0 hover:bg-amber-400/40'}`}>
                             <div className={`w-0.5 h-8 rounded-full pointer-events-none transition-all ${isSel ? 'bg-black/60' : 'bg-amber-400/0 group-hover/trim:bg-amber-400'}`} />
                           </div>
-                          <div data-handle="trim-end" onPointerDown={e => { e.stopPropagation(); handleTrimEnd(clip.id, e); }} className={`absolute right-0 top-0 bottom-0 w-4 cursor-ew-resize z-20 flex items-center justify-center group/trim transition-all ${isSel ? 'bg-amber-400/90' : 'bg-amber-400/0 hover:bg-amber-400/40'}`}>
+                          <div data-handle="trim-end" style={{ touchAction: 'none' }} onPointerDown={e => { e.stopPropagation(); handleTrimEnd(clip.id, e); }} className={`absolute right-0 top-0 bottom-0 w-6 cursor-ew-resize z-20 flex items-center justify-center group/trim transition-all ${isSel ? 'bg-amber-400/90' : 'bg-amber-400/0 hover:bg-amber-400/40'}`}>
                             <div className={`w-0.5 h-8 rounded-full pointer-events-none transition-all ${isSel ? 'bg-black/60' : 'bg-amber-400/0 group-hover/trim:bg-amber-400'}`} />
                           </div>
                         </div>
