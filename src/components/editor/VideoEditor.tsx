@@ -347,7 +347,7 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
 
   // ── Draggable playhead ──
 
-  const handlePlayheadMouseDown = useCallback((e: React.MouseEvent) => {
+  const handlePlayheadPointerDown = useCallback((e: React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setIsScrubbing(true);
@@ -364,18 +364,18 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
 
     updateFromX(e.clientX);
 
-    const onMove = (ev: MouseEvent) => { updateFromX(ev.clientX); edgeAutoScroll(ev.clientX, updateFromX); };
+    const onMove = (ev: PointerEvent) => { updateFromX(ev.clientX); edgeAutoScroll(ev.clientX, updateFromX); };
     const onUp = () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp); window.removeEventListener('pointercancel', onUp);
       stopEdgeAutoScroll();
       setIsScrubbing(false);
     };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp); window.addEventListener('pointercancel', onUp);
   }, [duration, seekTo, isPlaying, edgeAutoScroll, stopEdgeAutoScroll]);
 
-  const handleTimelineTrackClick = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleTimelineTrackClick = (e: React.PointerEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     seekTo(pct * duration);
@@ -413,14 +413,14 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
     setTimelineClips(prev => { const n = [...prev]; n.splice(targetIdx, 1, partA, partB); return n; });
   };
 
-  const handleClipMouseDown = (clipId: number, e: React.MouseEvent) => {
+  const handleClipPointerDown = (clipId: number, e: React.PointerEvent) => {
     e.stopPropagation();
     const startX = e.clientX;
     let didDrag = false;
-    const onMove = (ev: MouseEvent) => { if (!didDrag && Math.abs(ev.clientX - startX) > 6) didDrag = true; if (didDrag) { const upd = (x: number) => setDragState({ clipId, startX, currentX: x }); upd(ev.clientX); edgeAutoScroll(ev.clientX, upd); } };
-    const onUp = (ev: MouseEvent) => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
+    const onMove = (ev: PointerEvent) => { if (!didDrag && Math.abs(ev.clientX - startX) > 6) didDrag = true; if (didDrag) { const upd = (x: number) => setDragState({ clipId, startX, currentX: x }); upd(ev.clientX); edgeAutoScroll(ev.clientX, upd); } };
+    const onUp = (ev: PointerEvent) => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp); window.removeEventListener('pointercancel', onUp);
       stopEdgeAutoScroll();
       if (didDrag) {
         const track = timelineTrackRef.current;
@@ -445,15 +445,15 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
         setSelectedClipId(prev => (prev === clipId ? null : clipId));
       }
     };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp); window.addEventListener('pointercancel', onUp);
   };
 
-  const handleTrimEnd = (clipId: number, e: React.MouseEvent) => {
+  const handleTrimEnd = (clipId: number, e: React.PointerEvent) => {
     e.stopPropagation(); e.preventDefault();
     const startX = e.clientX;
     const startDur = timelineClips.find(c => c.id === clipId)!.duration;
-    const onMove = (ev: MouseEvent) => {
+    const onMove = (ev: PointerEvent) => {
       const upd = (x: number) => {
         const delta = (x - startX) / (PX_PER_SEC * timelineZoom);
         setTimelineClips(prev => prev.map(c => c.id === clipId ? { ...c, duration: Math.max(1, startDur + delta) } : c));
@@ -461,16 +461,16 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
       upd(ev.clientX);
       edgeAutoScroll(ev.clientX, upd);
     };
-    const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); stopEdgeAutoScroll(); };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
+    const onUp = () => { window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); window.removeEventListener('pointercancel', onUp); stopEdgeAutoScroll(); };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp); window.addEventListener('pointercancel', onUp);
   };
 
-  const handleTrimStart = (clipId: number, e: React.MouseEvent) => {
+  const handleTrimStart = (clipId: number, e: React.PointerEvent) => {
     e.stopPropagation(); e.preventDefault();
     const startX = e.clientX;
     const startDur = timelineClips.find(c => c.id === clipId)!.duration;
-    const onMove = (ev: MouseEvent) => {
+    const onMove = (ev: PointerEvent) => {
       const upd = (x: number) => {
         const delta = (x - startX) / (PX_PER_SEC * timelineZoom);
         setTimelineClips(prev => prev.map(c => c.id === clipId ? { ...c, duration: Math.max(1, startDur - delta) } : c));
@@ -478,9 +478,9 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
       upd(ev.clientX);
       edgeAutoScroll(ev.clientX, upd);
     };
-    const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); stopEdgeAutoScroll(); };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
+    const onUp = () => { window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); window.removeEventListener('pointercancel', onUp); stopEdgeAutoScroll(); };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp); window.addEventListener('pointercancel', onUp);
   };
 
 
@@ -950,7 +950,7 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
                   <div
                     className="absolute top-0 bottom-0 w-0.5 bg-white/90 shadow-[0_0_10px_rgba(255,255,255,0.8)] z-40 cursor-ew-resize group/ph"
                     style={{ left: playheadX }}
-                    onMouseDown={handlePlayheadMouseDown}
+                    onPointerDown={handlePlayheadPointerDown}
                   >
                     {/* Grab handle at top — always visible */}
                     <div className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-4 h-4 bg-white rounded-full shadow-lg flex items-center justify-center cursor-ew-resize transition-transform group-hover/ph:scale-125">
@@ -994,7 +994,7 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
                       const isDrag = dragState?.clipId === clip.id;
                       const clipPx = Math.round(clip.duration * PX_PER_SEC * timelineZoom);
                       parts.push(
-                        <div key={clip.id} onMouseDown={e => { if (!(e.target as HTMLElement).dataset.handle) handleClipMouseDown(clip.id, e); }} onClick={e => e.stopPropagation()}
+                        <div key={clip.id} onPointerDown={e => { if (!(e.target as HTMLElement).dataset.handle) handleClipPointerDown(clip.id, e); }} onClick={e => e.stopPropagation()}
                           className={`relative shrink-0 h-full cursor-grab active:cursor-grabbing transition-all ${isDrag ? 'opacity-60 ring-2 ring-primary ring-inset' : isSel ? 'ring-2 ring-amber-400 ring-inset brightness-110' : 'hover:brightness-110'}`}
                           style={{ width: clipPx }}>
                           {clip.thumbUrl ? <img src={clip.thumbUrl} className="w-full h-full object-cover pointer-events-none" alt="" />
@@ -1004,7 +1004,7 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
                           {isSel && <div className="absolute inset-0 border-2 border-amber-400 pointer-events-none z-10 rounded-sm" />}
                           {isSel && (
                             <button
-                              onMouseDown={e => { e.stopPropagation(); e.preventDefault(); }}
+                              onPointerDown={e => { e.stopPropagation(); e.preventDefault(); }}
                               onClick={e => { e.stopPropagation(); setTimelineClips(prev => prev.filter(c => c.id !== clip.id)); setSelectedClipId(null); }}
                               className="absolute -top-2 -right-2 z-40 w-6 h-6 flex items-center justify-center rounded-full bg-red-500 hover:bg-red-600 text-white shadow-[0_2px_8px_rgba(0,0,0,0.4)] hover:scale-110 transition-all"
                               title="Odstrániť klip"
@@ -1012,10 +1012,10 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
                               <Trash2 className="w-3 h-3" />
                             </button>
                           )}
-                          <div data-handle="trim-start" onMouseDown={e => { e.stopPropagation(); handleTrimStart(clip.id, e); }} className={`absolute left-0 top-0 bottom-0 w-4 cursor-ew-resize z-20 flex items-center justify-center group/trim transition-all ${isSel ? 'bg-amber-400/90' : 'bg-amber-400/0 hover:bg-amber-400/40'}`}>
+                          <div data-handle="trim-start" onPointerDown={e => { e.stopPropagation(); handleTrimStart(clip.id, e); }} className={`absolute left-0 top-0 bottom-0 w-4 cursor-ew-resize z-20 flex items-center justify-center group/trim transition-all ${isSel ? 'bg-amber-400/90' : 'bg-amber-400/0 hover:bg-amber-400/40'}`}>
                             <div className={`w-0.5 h-8 rounded-full pointer-events-none transition-all ${isSel ? 'bg-black/60' : 'bg-amber-400/0 group-hover/trim:bg-amber-400'}`} />
                           </div>
-                          <div data-handle="trim-end" onMouseDown={e => { e.stopPropagation(); handleTrimEnd(clip.id, e); }} className={`absolute right-0 top-0 bottom-0 w-4 cursor-ew-resize z-20 flex items-center justify-center group/trim transition-all ${isSel ? 'bg-amber-400/90' : 'bg-amber-400/0 hover:bg-amber-400/40'}`}>
+                          <div data-handle="trim-end" onPointerDown={e => { e.stopPropagation(); handleTrimEnd(clip.id, e); }} className={`absolute right-0 top-0 bottom-0 w-4 cursor-ew-resize z-20 flex items-center justify-center group/trim transition-all ${isSel ? 'bg-amber-400/90' : 'bg-amber-400/0 hover:bg-amber-400/40'}`}>
                             <div className={`w-0.5 h-8 rounded-full pointer-events-none transition-all ${isSel ? 'bg-black/60' : 'bg-amber-400/0 group-hover/trim:bg-amber-400'}`} />
                           </div>
                         </div>
@@ -1024,7 +1024,7 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
                     })}
                     {/* Pridať fotku alebo video na koniec časovej osi */}
                     <button
-                      onMouseDown={e => e.stopPropagation()}
+                      onPointerDown={e => e.stopPropagation()}
                       onClick={e => { e.stopPropagation(); mediaInputRef.current?.click(); }}
                       title="Pridať fotku alebo video"
                       className="shrink-0 h-full w-14 flex flex-col items-center justify-center gap-0.5 border border-dashed border-primary/30 text-muted-foreground hover:text-primary hover:bg-primary/10 hover:border-primary/60 transition-all"
@@ -1055,7 +1055,7 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
                       ) : musicClips.map(mc => {
                         const mSel = selectedMusicId === mc.id;
                         return (
-                          <div key={mc.id} onMouseDown={e => { e.stopPropagation(); const startX = e.clientX; let didDrag = false; const onMove = (ev: MouseEvent) => { if (Math.abs(ev.clientX - startX) > 6) didDrag = true; }; const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); if (!didDrag) setSelectedMusicId(prev => prev === mc.id ? null : mc.id); }; window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp); }}
+                          <div key={mc.id} onPointerDown={e => { e.stopPropagation(); const startX = e.clientX; let didDrag = false; const onMove = (ev: PointerEvent) => { if (Math.abs(ev.clientX - startX) > 6) didDrag = true; }; const onUp = () => { window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); window.removeEventListener('pointercancel', onUp); if (!didDrag) setSelectedMusicId(prev => prev === mc.id ? null : mc.id); }; window.addEventListener('pointermove', onMove); window.addEventListener('pointerup', onUp); window.addEventListener('pointercancel', onUp); }}
                             className="relative flex-1 h-full bg-gradient-to-r from-indigo-700/50 to-violet-600/50 flex items-center px-2 cursor-grab active:cursor-grabbing transition-all hover:brightness-110">
                             <div className="flex gap-px w-full items-end pointer-events-none" style={{ height: 20 }}>{WAVEFORM.slice(0, 50).map((h, i) => <div key={i} className="flex-1 bg-white/30 rounded-full" style={{ height: `${h}%` }} />)}</div>
                             <span className="absolute bottom-0.5 left-2 text-[7px] text-white/50 font-medium truncate max-w-[80%] pointer-events-none">{mc.label}</span>
