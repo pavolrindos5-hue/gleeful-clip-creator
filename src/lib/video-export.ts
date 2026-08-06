@@ -14,6 +14,12 @@ export type ExportOptions = {
   width?: number;
   height?: number;
   onProgress?: (pct: number) => void;
+  /** prechod pre klip s daným indexom (aplikuje sa na jeho začiatku) */
+  transitions?: Record<number, string> | undefined;
+  /** priblíženie (AI stabilizácia) */
+  zoom?: number | undefined;
+  /** titulky vypálené do videa */
+  captions?: string[] | undefined;
 };
 
 function pickMime(): { mime: string; ext: string } {
