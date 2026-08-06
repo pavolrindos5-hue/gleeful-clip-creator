@@ -730,8 +730,8 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
                 transition={{ duration: 0.7, ease: 'easeInOut' }}
               >
                 {previewClip.type === 'image'
-                  ? <img key={previewClip.id} src={previewClip.src} className="w-full h-full object-contain" style={{ filter: videoFilter }} alt={previewClip.label} />
-                  : <video key={previewClip.id} ref={videoRef} src={previewClip.src} className="w-full h-full object-contain" style={{ filter: videoFilter }} onTimeUpdate={handleTimeUpdate} onEnded={() => setIsPlaying(false)} muted={isMuted} />}
+                  ? <img key={previewClip.id} src={previewClip.src} className="w-full h-full object-contain" style={{ filter: videoFilter, transform: mediaTransform }} alt={previewClip.label} />
+                  : <video key={previewClip.id} ref={videoRef} src={previewClip.src} className="w-full h-full object-contain" style={{ filter: videoFilter, transform: mediaTransform }} onTimeUpdate={handleTimeUpdate} onEnded={() => setIsPlaying(false)} muted={isMuted} />}
               </motion.div>
             ) : (
               <div className="w-full h-full flex items-center justify-center"><div className="text-center space-y-3 opacity-40"><Film className="w-20 h-20 mx-auto text-primary/40" /><p className="text-muted-foreground text-sm">Žiadne video nevybrané</p></div></div>
