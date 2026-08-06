@@ -527,9 +527,21 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
     try {
       setIsPlaying(false);
       const { exportTimeline, downloadBlob } = await import('@/lib/video-export');
+      // prechody premapované na indexy exportovaných (vyfiltrovaných) klipov
+      const exportTransitions: Record<number, string> = {};
+      let outIdx = 0;
+      timelineClips.forEach((c, i) => {
+        if (!c.src) return;
+        const t = clipTransitions[i];
+        if (t && outIdx > 0) exportTransitions[outIdx] = t;
+        outIdx++;
+      });
       const { blob, ext } = await exportTimeline({
         clips: clips.map(c => ({ src: c.src, type: c.type, duration: c.duration })),
         filter: videoFilter,
+        transitions: exportTransitions,
+        zoom: appliedTools.has('stabilize') ? 1.06 : 1,
+        captions: appliedTools.has('captions') ? [...SUBTITLE_LINES] : undefined,
         onProgress: setExportPct,
       });
       const base = (videoName || 'export').replace(/\.[^/.]+$/, '');
