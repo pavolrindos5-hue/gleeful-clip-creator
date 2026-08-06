@@ -14,6 +14,12 @@ export type ExportOptions = {
   width?: number;
   height?: number;
   onProgress?: (pct: number) => void;
+  /** prechod pre klip s daným indexom (aplikuje sa na jeho začiatku) */
+  transitions?: Record<number, string> | undefined;
+  /** priblíženie (AI stabilizácia) */
+  zoom?: number | undefined;
+  /** titulky vypálené do videa */
+  captions?: string[] | undefined;
 };
 
 function pickMime(): { mime: string; ext: string } {
@@ -139,8 +145,138 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
   let elapsedBefore = 0;
 
   const cssFilter = opts.filter ?? 'none';
+  const transitions = opts.transitions ?? {};
+  const zoom = opts.zoom ?? 1;
+  const captions = opts.captions ?? [];
+  const TR_DUR = 0.7;
 
-  for (const item of prepared) {
+  // snímka predchádzajúceho klipu (pre prechody)
+  const prevCanvas = document.createElement('canvas');
+  prevCanvas.width = width;
+  prevCanvas.height = height;
+  const prevCtx = prevCanvas.getContext('2d');
+  let hasPrev = false;
+
+  const drawMedia = (media: HTMLVideoElement | HTMLImageElement, filter: string) => {
+    ctx.save();
+    ctx.filter = filter;
+    if (zoom !== 1) {
+      ctx.translate(width / 2, height / 2);
+      ctx.scale(zoom, zoom);
+      ctx.translate(-width / 2, -height / 2);
+    }
+    drawCover(ctx, media, width, height);
+    ctx.restore();
+  };
+
+  const drawCaption = (globalT: number) => {
+    if (!captions.length) return;
+    const line = captions[Math.floor(globalT / 3) % captions.length];
+    if (!line) return;
+    ctx.save();
+    ctx.filter = 'none';
+    const fontSize = Math.max(18, Math.round(height * 0.045));
+    ctx.font = `600 ${fontSize}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const metrics = ctx.measureText(line);
+    const padX = fontSize * 0.7;
+    const boxW = metrics.width + padX * 2;
+    const boxH = fontSize * 1.9;
+    const cx = width / 2;
+    const cy = height - boxH * 1.1;
+    ctx.fillStyle = 'rgba(0,0,0,0.65)';
+    ctx.fillRect(cx - boxW / 2, cy - boxH / 2, boxW, boxH);
+    ctx.fillStyle = '#fff';
+    ctx.fillText(line, cx, cy);
+    ctx.restore();
+  };
+
+  // aplikuje prechod na kreslenie nového klipu ponad predchádzajúcu snímku
+  const drawTransition = (
+    id: string,
+    p: number, // 0..1
+    media: HTMLVideoElement | HTMLImageElement,
+  ) => {
+    // spodná vrstva = posledná snímka predchádzajúceho klipu
+    if (hasPrev) {
+      ctx.save();
+      ctx.filter = 'none';
+      ctx.drawImage(prevCanvas, 0, 0, width, height);
+      ctx.restore();
+    }
+    ctx.save();
+    let filter = cssFilter;
+    switch (id) {
+      case 'wipe-l':
+        ctx.beginPath();
+        ctx.rect(width * (1 - p), 0, width * p, height);
+        ctx.clip();
+        break;
+      case 'wipe-r':
+        ctx.beginPath();
+        ctx.rect(0, 0, width * p, height);
+        ctx.clip();
+        break;
+      case 'zoom-in': {
+        ctx.globalAlpha = p;
+        const s = 0.3 + 0.7 * p;
+        ctx.translate(width / 2, height / 2); ctx.scale(s, s); ctx.translate(-width / 2, -height / 2);
+        break;
+      }
+      case 'zoom-out': {
+        ctx.globalAlpha = p;
+        const s = 1.8 - 0.8 * p;
+        ctx.translate(width / 2, height / 2); ctx.scale(s, s); ctx.translate(-width / 2, -height / 2);
+        break;
+      }
+      case 'slide-l':
+        ctx.translate(width * (1 - p), 0);
+        break;
+      case 'slide-r':
+        ctx.translate(-width * (1 - p), 0);
+        break;
+      case 'rotate': {
+        ctx.globalAlpha = p;
+        const s = 0.4 + 0.6 * p;
+        ctx.translate(width / 2, height / 2);
+        ctx.rotate((-120 * (1 - p) * Math.PI) / 180);
+        ctx.scale(s, s);
+        ctx.translate(-width / 2, -height / 2);
+        break;
+      }
+      case 'dissolve':
+        ctx.globalAlpha = p;
+        filter = `${cssFilter === 'none' ? '' : cssFilter} blur(${(6 * (1 - p)).toFixed(2)}px)`.trim();
+        break;
+      case 'flash':
+        ctx.globalAlpha = p;
+        filter = `${cssFilter === 'none' ? '' : cssFilter} brightness(${(1 + 5 * (1 - p)).toFixed(2)})`.trim();
+        break;
+      case 'blur':
+        ctx.globalAlpha = p;
+        filter = `${cssFilter === 'none' ? '' : cssFilter} blur(${(10 * (1 - p)).toFixed(2)}px)`.trim();
+        break;
+      case 'glitch':
+        ctx.globalAlpha = p;
+        ctx.transform(1, 0, Math.tan((18 * (1 - p) * Math.PI) / 180), 1, width * 0.12 * (1 - p), 0);
+        break;
+      case 'fade':
+      default:
+        ctx.globalAlpha = p;
+        break;
+    }
+    ctx.filter = filter || 'none';
+    if (zoom !== 1) {
+      ctx.translate(width / 2, height / 2); ctx.scale(zoom, zoom); ctx.translate(-width / 2, -height / 2);
+    }
+    drawCover(ctx, media, width, height);
+    ctx.restore();
+  };
+
+  for (let i = 0; i < prepared.length; i++) {
+    const item = prepared[i];
+    const transitionId = i > 0 ? transitions[i] : undefined;
     const startWall = performance.now();
     if (item.kind === 'video') {
       const v = item.el;
@@ -151,14 +287,20 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
     await new Promise<void>((resolve) => {
       const step = () => {
         const t = (performance.now() - startWall) / 1000;
-        ctx.filter = cssFilter;
+        ctx.globalAlpha = 1;
+        ctx.filter = 'none';
         ctx.clearRect(0, 0, width, height);
         ctx.fillStyle = '#000';
-        // pozadie kreslíme bez filtra
-        ctx.filter = 'none';
         ctx.fillRect(0, 0, width, height);
-        ctx.filter = cssFilter;
-        drawCover(ctx, item.el, width, height);
+
+        if (transitionId && t < TR_DUR) {
+          const raw = Math.min(1, t / TR_DUR);
+          const p = raw < 0.5 ? 2 * raw * raw : 1 - Math.pow(-2 * raw + 2, 2) / 2; // easeInOut
+          drawTransition(transitionId, p, item.el);
+        } else {
+          drawMedia(item.el, cssFilter);
+        }
+        drawCaption(elapsedBefore + t);
 
         opts.onProgress?.(Math.min(99, Math.round(((elapsedBefore + t) / totalDuration) * 100)));
 
@@ -170,8 +312,14 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
     });
 
     if (item.kind === 'video') item.el.pause();
+    if (prevCtx) {
+      prevCtx.clearRect(0, 0, width, height);
+      prevCtx.drawImage(canvas, 0, 0);
+      hasPrev = true;
+    }
     elapsedBefore += item.duration;
   }
+
 
   recorder.stop();
   await stopped;

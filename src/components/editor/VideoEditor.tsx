@@ -382,7 +382,13 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
   };
 
   const runAITool = (toolId: string) => {
-    if (appliedTools.has(toolId) || activeTool === toolId) return;
+    // Opätovný klik na už aplikovaný nástroj ho vypne
+    if (appliedTools.has(toolId)) {
+      setAppliedTools(s => { const n = new Set(s); n.delete(toolId); return n; });
+      setToolProgress(p => ({ ...p, [toolId]: 0 }));
+      return;
+    }
+    if (activeTool === toolId) return;
     setActiveTool(toolId as AITool);
     setToolProgress(p => ({ ...p, [toolId]: 0 }));
     const start = Date.now();
@@ -521,9 +527,21 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
     try {
       setIsPlaying(false);
       const { exportTimeline, downloadBlob } = await import('@/lib/video-export');
+      // prechody premapované na indexy exportovaných (vyfiltrovaných) klipov
+      const exportTransitions: Record<number, string> = {};
+      let outIdx = 0;
+      timelineClips.forEach((c, i) => {
+        if (!c.src) return;
+        const t = clipTransitions[i];
+        if (t && outIdx > 0) exportTransitions[outIdx] = t;
+        outIdx++;
+      });
       const { blob, ext } = await exportTimeline({
         clips: clips.map(c => ({ src: c.src, type: c.type, duration: c.duration })),
         filter: videoFilter,
+        transitions: exportTransitions,
+        zoom: appliedTools.has('stabilize') ? 1.06 : 1,
+        captions: appliedTools.has('captions') ? [...SUBTITLE_LINES] : undefined,
         onProgress: setExportPct,
       });
       const base = (videoName || 'export').replace(/\.[^/.]+$/, '');
@@ -535,7 +553,10 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
       setExporting(false);
       setExportPct(0);
     }
-  }, [exporting, timelineClips, videoFilter, videoName]);
+  }, [exporting, timelineClips, videoFilter, videoName, clipTransitions, appliedTools]);
+
+  // AI stabilizácia = jemné priblíženie (rovnaké aj v exporte)
+  const mediaTransform = appliedTools.has('stabilize') ? 'scale(1.06)' : undefined;
 
 
 
@@ -709,8 +730,8 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
                 transition={{ duration: 0.7, ease: 'easeInOut' }}
               >
                 {previewClip.type === 'image'
-                  ? <img key={previewClip.id} src={previewClip.src} className="w-full h-full object-contain" style={{ filter: videoFilter }} alt={previewClip.label} />
-                  : <video key={previewClip.id} ref={videoRef} src={previewClip.src} className="w-full h-full object-contain" style={{ filter: videoFilter }} onTimeUpdate={handleTimeUpdate} onEnded={() => setIsPlaying(false)} muted={isMuted} />}
+                  ? <img key={previewClip.id} src={previewClip.src} className="w-full h-full object-contain" style={{ filter: videoFilter, transform: mediaTransform }} alt={previewClip.label} />
+                  : <video key={previewClip.id} ref={videoRef} src={previewClip.src} className="w-full h-full object-contain" style={{ filter: videoFilter, transform: mediaTransform }} onTimeUpdate={handleTimeUpdate} onEnded={() => setIsPlaying(false)} muted={isMuted} />}
               </motion.div>
             ) : (
               <div className="w-full h-full flex items-center justify-center"><div className="text-center space-y-3 opacity-40"><Film className="w-20 h-20 mx-auto text-primary/40" /><p className="text-muted-foreground text-sm">Žiadne video nevybrané</p></div></div>
@@ -848,7 +869,7 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
                   {activePanel === 'ai' && (
                     <motion.div key="ai" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} className="space-y-2">
                       <div className="flex items-center gap-2 mb-3"><Sparkles className="w-4 h-4 text-primary" /><p className="text-xs font-bold text-foreground">AI Nástroje</p></div>
-                      <p className="text-[10px] text-muted-foreground -mt-2 mb-3 leading-relaxed">Klikni na nástroj — AI ho aplikuje automaticky.</p>
+                      <p className="text-[10px] text-muted-foreground -mt-2 mb-3 leading-relaxed">Klikni na nástroj — aplikuje sa na náhľad aj do exportu. Ďalším klikom ho vypneš.</p>
                       {AI_TOOLS.map(({ id, label, icon: Icon, desc, detail }) => {
                         const isApplied = appliedTools.has(id); const isRunning = activeTool === id; const pct = toolProgress[id] ?? 0;
                         return (
