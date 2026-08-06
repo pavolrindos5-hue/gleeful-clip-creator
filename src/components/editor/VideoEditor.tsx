@@ -553,7 +553,10 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
       setExporting(false);
       setExportPct(0);
     }
-  }, [exporting, timelineClips, videoFilter, videoName]);
+  }, [exporting, timelineClips, videoFilter, videoName, clipTransitions, appliedTools]);
+
+  // AI stabilizácia = jemné priblíženie (rovnaké aj v exporte)
+  const mediaTransform = appliedTools.has('stabilize') ? 'scale(1.06)' : undefined;
 
 
 
