@@ -382,7 +382,13 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
   };
 
   const runAITool = (toolId: string) => {
-    if (appliedTools.has(toolId) || activeTool === toolId) return;
+    // Opätovný klik na už aplikovaný nástroj ho vypne
+    if (appliedTools.has(toolId)) {
+      setAppliedTools(s => { const n = new Set(s); n.delete(toolId); return n; });
+      setToolProgress(p => ({ ...p, [toolId]: 0 }));
+      return;
+    }
+    if (activeTool === toolId) return;
     setActiveTool(toolId as AITool);
     setToolProgress(p => ({ ...p, [toolId]: 0 }));
     const start = Date.now();
