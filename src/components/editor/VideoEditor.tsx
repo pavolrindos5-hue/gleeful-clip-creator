@@ -1103,13 +1103,25 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
                         </button>
                       ) : musicClips.map(mc => {
                         const mSel = selectedMusicId === mc.id;
+                        const leftPx = Math.round((mc.start ?? 0) * PX_PER_SEC * timelineZoom);
+                        const widthPx = Math.max(24, Math.round((mc.duration ?? totalDuration) * PX_PER_SEC * timelineZoom));
                         return (
-                          <div key={mc.id} onPointerDown={e => { e.stopPropagation(); const startX = e.clientX; let didDrag = false; const onMove = (ev: PointerEvent) => { if (Math.abs(ev.clientX - startX) > 6) didDrag = true; }; const onUp = () => { window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); window.removeEventListener('pointercancel', onUp); if (!didDrag) setSelectedMusicId(prev => prev === mc.id ? null : mc.id); }; window.addEventListener('pointermove', onMove); window.addEventListener('pointerup', onUp); window.addEventListener('pointercancel', onUp); }}
-                            className="relative flex-1 h-full bg-gradient-to-r from-indigo-700/50 to-violet-600/50 flex items-center px-2 cursor-grab active:cursor-grabbing transition-all hover:brightness-110">
+                          <div key={mc.id} onPointerDown={e => { if (!(e.target as HTMLElement).dataset.handle) handleMusicPointerDown(mc.id, e); }} onClick={e => e.stopPropagation()}
+                            style={{ position: 'absolute', left: leftPx, width: widthPx, top: 0, bottom: 0, touchAction: 'none' }}
+                            className={`bg-gradient-to-r from-indigo-700/50 to-violet-600/50 flex items-center px-2 cursor-grab active:cursor-grabbing transition-all ${mSel ? 'ring-2 ring-amber-400 ring-inset brightness-110' : 'hover:brightness-110'}`}>
                             <div className="flex gap-px w-full items-end pointer-events-none" style={{ height: 20 }}>{WAVEFORM.slice(0, 50).map((h, i) => <div key={i} className="flex-1 bg-white/30 rounded-full" style={{ height: `${h}%` }} />)}</div>
                             <span className="absolute bottom-0.5 left-2 text-[7px] text-white/50 font-medium truncate max-w-[80%] pointer-events-none">{mc.label}</span>
-                            {mSel && <div className="absolute inset-0 border-2 border-white pointer-events-none" />}
+                            {mSel && <div className="absolute inset-0 border-2 border-amber-400 pointer-events-none z-10" />}
+                            <div data-handle="m-trim-start" style={{ touchAction: 'none' }} onPointerDown={e => { e.stopPropagation(); handleMusicTrim(mc.id, e, 'start'); }}
+                              className={`absolute left-0 top-0 bottom-0 w-6 cursor-ew-resize z-20 flex items-center justify-center group/mtrim transition-all ${mSel ? 'bg-amber-400/90' : 'bg-amber-400/0 hover:bg-amber-400/40'}`}>
+                              <div className={`w-0.5 h-5 rounded-full pointer-events-none ${mSel ? 'bg-black/60' : 'bg-amber-400/0 group-hover/mtrim:bg-amber-400'}`} />
+                            </div>
+                            <div data-handle="m-trim-end" style={{ touchAction: 'none' }} onPointerDown={e => { e.stopPropagation(); handleMusicTrim(mc.id, e, 'end'); }}
+                              className={`absolute right-0 top-0 bottom-0 w-6 cursor-ew-resize z-20 flex items-center justify-center group/mtrim transition-all ${mSel ? 'bg-amber-400/90' : 'bg-amber-400/0 hover:bg-amber-400/40'}`}>
+                              <div className={`w-0.5 h-5 rounded-full pointer-events-none ${mSel ? 'bg-black/60' : 'bg-amber-400/0 group-hover/mtrim:bg-amber-400'}`} />
+                            </div>
                           </div>
+
                         );
                       })}
                     </div>
