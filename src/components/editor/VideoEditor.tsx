@@ -274,13 +274,17 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
     a.playbackRate = playbackRate;
   }, [volume, isMuted, playbackRate, musicTrack]);
 
-  // sync pozície pri scrubbovaní / seeku
+  // sync pozície pri scrubbovaní / seeku (rešpektuje posun a orez klipu)
   useEffect(() => {
     const a = musicElRef.current;
-    if (!a || !a.duration) return;
-    const target = currentTime % a.duration;
+    if (!a || !a.duration || !musicTrack) return;
+    const s = musicTrack.start ?? 0;
+    const len = musicTrack.duration ?? totalDuration;
+    if (currentTime < s || currentTime > s + len) { a.pause(); return; }
+    const target = (currentTime - s) % a.duration;
     if (Math.abs(a.currentTime - target) > 0.35) a.currentTime = target;
-  }, [currentTime, musicTrack]);
+    if (isPlaying && a.paused) a.play().catch(() => undefined);
+  }, [currentTime, musicTrack, totalDuration, isPlaying]);
 
   // play / pause spolu s videom
   useEffect(() => {
