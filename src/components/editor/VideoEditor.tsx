@@ -31,7 +31,7 @@ type TimelineClip = {
   src?: string;
 };
 
-type MusicClip = { id: number; label: string };
+type MusicClip = { id: number; label: string; src?: string };
 
 
 const AI_TOOLS = [
@@ -178,6 +178,7 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
   const videoRef      = useRef<HTMLVideoElement>(null);
   const mediaInputRef = useRef<HTMLInputElement>(null);
   const musicAudioRef = useRef<HTMLInputElement>(null);
+  const musicElRef = useRef<HTMLAudioElement>(null);
   const timelineTrackRef = useRef<HTMLDivElement>(null);
   const timelineScrollRef = useRef<HTMLDivElement>(null);
   const prevClipCountRef = useRef(0);
@@ -262,6 +263,33 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
   useEffect(() => { setShowCropOverlay(leftTool === 'crop'); }, [leftTool]);
   useEffect(() => { if (videoRef.current) videoRef.current.volume = volume / 100; }, [volume]);
   useEffect(() => { if (videoRef.current) videoRef.current.playbackRate = playbackRate; }, [playbackRate]);
+
+  // ── Hudba: reálne prehrávanie v editore ──
+  const musicTrack = musicClips[0] ?? null;
+
+  useEffect(() => {
+    const a = musicElRef.current;
+    if (!a) return;
+    a.volume = isMuted ? 0 : volume / 100;
+    a.playbackRate = playbackRate;
+  }, [volume, isMuted, playbackRate, musicTrack]);
+
+  // sync pozície pri scrubbovaní / seeku
+  useEffect(() => {
+    const a = musicElRef.current;
+    if (!a || !a.duration) return;
+    const target = currentTime % a.duration;
+    if (Math.abs(a.currentTime - target) > 0.35) a.currentTime = target;
+  }, [currentTime, musicTrack]);
+
+  // play / pause spolu s videom
+  useEffect(() => {
+    const a = musicElRef.current;
+    if (!a) return;
+    if (isPlaying) { a.play().catch(() => undefined); }
+    else a.pause();
+  }, [isPlaying, musicTrack]);
+
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -1113,7 +1141,8 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
       <input ref={mediaInputRef} type="file" accept="video/*,image/*,.mp4,.mov,.webm,.avi,.mkv,.m4v" className="hidden"
         onChange={e => { const f = e.target.files?.[0]; if (f) addMediaFile(f); e.target.value = ''; }} />
       <input ref={musicAudioRef} type="file" accept="audio/*" className="hidden"
-        onChange={e => { const file = e.target.files?.[0]; if (file) setMusicClips(prev => [...prev, { id: Date.now(), label: file.name.replace(/\.[^/.]+$/, '') }]); e.target.value = ''; setShowMusicModal(false); }} />
+        onChange={e => { const file = e.target.files?.[0]; if (file) setMusicClips(prev => [...prev, { id: Date.now(), label: file.name.replace(/\.[^/.]+$/, ''), src: URL.createObjectURL(file) }]); e.target.value = ''; setShowMusicModal(false); }} />
+      {musicTrack?.src && <audio ref={musicElRef} src={musicTrack.src} className="hidden" preload="auto" loop />}
       <AnimatePresence>
         {showMusicModal && (
           <>
