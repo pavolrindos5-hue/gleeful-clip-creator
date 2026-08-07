@@ -1209,7 +1209,7 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
       <input ref={mediaInputRef} type="file" accept="video/*,image/*,.mp4,.mov,.webm,.avi,.mkv,.m4v" className="hidden"
         onChange={e => { const f = e.target.files?.[0]; if (f) addMediaFile(f); e.target.value = ''; }} />
       <input ref={musicAudioRef} type="file" accept="audio/*" className="hidden"
-        onChange={e => { const file = e.target.files?.[0]; if (file) setMusicClips(prev => [...prev, { id: Date.now(), label: file.name.replace(/\.[^/.]+$/, ''), src: URL.createObjectURL(file) }]); e.target.value = ''; setShowMusicModal(false); }} />
+        onChange={e => { const file = e.target.files?.[0]; if (file) setMusicClips(prev => [...prev, { id: Date.now(), label: file.name.replace(/\.[^/.]+$/, ''), src: URL.createObjectURL(file), start: 0, duration: totalDuration || 30 }]); e.target.value = ''; setShowMusicModal(false); }} />
       {musicTrack?.src && <audio ref={musicElRef} src={musicTrack.src} className="hidden" preload="auto" loop />}
       <AnimatePresence>
         {showMusicModal && (
