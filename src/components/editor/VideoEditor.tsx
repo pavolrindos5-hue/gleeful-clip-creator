@@ -31,7 +31,7 @@ type TimelineClip = {
   src?: string;
 };
 
-type MusicClip = { id: number; label: string; src?: string };
+type MusicClip = { id: number; label: string; src?: string; start?: number; duration?: number };
 
 
 const AI_TOOLS = [
@@ -517,6 +517,58 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
     window.addEventListener('pointerup', onUp); window.addEventListener('pointercancel', onUp);
   };
 
+
+  // ── Hudobný klip: posúvanie a orezávanie ──
+  const handleMusicPointerDown = (id: number, e: React.PointerEvent) => {
+    e.stopPropagation();
+    const startX = e.clientX;
+    const mc = musicClips.find(c => c.id === id);
+    const baseStart = mc?.start ?? 0;
+    let didDrag = false;
+    const onMove = (ev: PointerEvent) => {
+      const upd = (x: number) => {
+        const delta = (x - startX) / (PX_PER_SEC * timelineZoom);
+        if (Math.abs(x - startX) > 4) didDrag = true;
+        setMusicClips(prev => prev.map(c => c.id === id ? { ...c, start: Math.max(0, baseStart + delta) } : c));
+      };
+      upd(ev.clientX);
+      edgeAutoScroll(ev.clientX, upd);
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp); window.removeEventListener('pointercancel', onUp);
+      stopEdgeAutoScroll();
+      if (!didDrag) setSelectedMusicId(prev => prev === id ? null : id);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp); window.addEventListener('pointercancel', onUp);
+  };
+
+  const handleMusicTrim = (id: number, e: React.PointerEvent, edge: 'start' | 'end') => {
+    e.stopPropagation(); e.preventDefault();
+    setSelectedMusicId(id);
+    const startX = e.clientX;
+    const mc = musicClips.find(c => c.id === id);
+    const baseStart = mc?.start ?? 0;
+    const baseDur = mc?.duration ?? totalDuration;
+    const onMove = (ev: PointerEvent) => {
+      const upd = (x: number) => {
+        const delta = (x - startX) / (PX_PER_SEC * timelineZoom);
+        setMusicClips(prev => prev.map(c => {
+          if (c.id !== id) return c;
+          if (edge === 'end') return { ...c, start: baseStart, duration: Math.max(1, baseDur + delta) };
+          const maxDelta = baseDur - 1;
+          const d = Math.min(Math.max(delta, -baseStart), maxDelta);
+          return { ...c, start: baseStart + d, duration: baseDur - d };
+        }));
+      };
+      upd(ev.clientX);
+      edgeAutoScroll(ev.clientX, upd);
+    };
+    const onUp = () => { window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); window.removeEventListener('pointercancel', onUp); stopEdgeAutoScroll(); };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp); window.addEventListener('pointercancel', onUp);
+  };
 
   const formatTime = (s: number) => { const m = Math.floor(s / 60); const sec = Math.floor(s % 60); return `${m}:${sec.toString().padStart(2, '0')}`; };
 
