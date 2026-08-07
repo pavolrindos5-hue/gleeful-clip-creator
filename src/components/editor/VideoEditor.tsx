@@ -264,6 +264,33 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
   useEffect(() => { if (videoRef.current) videoRef.current.volume = volume / 100; }, [volume]);
   useEffect(() => { if (videoRef.current) videoRef.current.playbackRate = playbackRate; }, [playbackRate]);
 
+  // ── Hudba: reálne prehrávanie v editore ──
+  const musicTrack = musicClips[0] ?? null;
+
+  useEffect(() => {
+    const a = musicElRef.current;
+    if (!a) return;
+    a.volume = isMuted ? 0 : volume / 100;
+    a.playbackRate = playbackRate;
+  }, [volume, isMuted, playbackRate, musicTrack]);
+
+  // sync pozície pri scrubbovaní / seeku
+  useEffect(() => {
+    const a = musicElRef.current;
+    if (!a || !a.duration) return;
+    const target = currentTime % a.duration;
+    if (Math.abs(a.currentTime - target) > 0.35) a.currentTime = target;
+  }, [currentTime, musicTrack]);
+
+  // play / pause spolu s videom
+  useEffect(() => {
+    const a = musicElRef.current;
+    if (!a) return;
+    if (isPlaying) { a.play().catch(() => undefined); }
+    else a.pause();
+  }, [isPlaying, musicTrack]);
+
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Delete' && e.key !== 'Backspace') return;
