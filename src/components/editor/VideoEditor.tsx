@@ -1168,6 +1168,17 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
                             <div className="flex gap-px w-full items-end pointer-events-none" style={{ height: 20 }}>{WAVEFORM.slice(0, 50).map((h, i) => <div key={i} className="flex-1 bg-white/30 rounded-full" style={{ height: `${h}%` }} />)}</div>
                             <span className="absolute bottom-0.5 left-2 text-[7px] text-white/50 font-medium truncate max-w-[80%] pointer-events-none">{mc.label}</span>
                             {mSel && <div className="absolute inset-0 border-2 border-amber-400 pointer-events-none z-10" />}
+                            {mSel && (
+                              <button
+                                data-handle="m-delete"
+                                onPointerDown={e => { e.stopPropagation(); e.preventDefault(); }}
+                                onClick={e => { e.stopPropagation(); setMusicClips(prev => prev.filter(c => c.id !== mc.id)); setSelectedMusicId(null); }}
+                                className="absolute -top-2 -right-2 z-40 w-6 h-6 flex items-center justify-center rounded-full bg-red-500 hover:bg-red-600 text-white shadow-[0_2px_8px_rgba(0,0,0,0.4)] hover:scale-110 transition-all"
+                                title="Odstrániť hudbu"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            )}
                             <div data-handle="m-trim-start" style={{ touchAction: 'none' }} onPointerDown={e => { e.stopPropagation(); handleMusicTrim(mc.id, e, 'start'); }}
                               className={`absolute left-0 top-0 bottom-0 w-6 cursor-ew-resize z-20 flex items-center justify-center group/mtrim transition-all ${mSel ? 'bg-amber-400/90' : 'bg-amber-400/0 hover:bg-amber-400/40'}`}>
                               <div className={`w-0.5 h-5 rounded-full pointer-events-none ${mSel ? 'bg-black/60' : 'bg-amber-400/0 group-hover/mtrim:bg-amber-400'}`} />
