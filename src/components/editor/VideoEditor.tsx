@@ -31,7 +31,7 @@ type TimelineClip = {
   src?: string;
 };
 
-type MusicClip = { id: number; label: string; src?: string };
+type MusicClip = { id: number; label: string; src?: string; start?: number; duration?: number };
 
 
 const AI_TOOLS = [
@@ -274,13 +274,17 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
     a.playbackRate = playbackRate;
   }, [volume, isMuted, playbackRate, musicTrack]);
 
-  // sync pozície pri scrubbovaní / seeku
+  // sync pozície pri scrubbovaní / seeku (rešpektuje posun a orez klipu)
   useEffect(() => {
     const a = musicElRef.current;
-    if (!a || !a.duration) return;
-    const target = currentTime % a.duration;
+    if (!a || !a.duration || !musicTrack) return;
+    const s = musicTrack.start ?? 0;
+    const len = musicTrack.duration ?? totalDuration;
+    if (currentTime < s || currentTime > s + len) { a.pause(); return; }
+    const target = (currentTime - s) % a.duration;
     if (Math.abs(a.currentTime - target) > 0.35) a.currentTime = target;
-  }, [currentTime, musicTrack]);
+    if (isPlaying && a.paused) a.play().catch(() => undefined);
+  }, [currentTime, musicTrack, totalDuration, isPlaying]);
 
   // play / pause spolu s videom
   useEffect(() => {
@@ -517,6 +521,58 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
     window.addEventListener('pointerup', onUp); window.addEventListener('pointercancel', onUp);
   };
 
+
+  // ── Hudobný klip: posúvanie a orezávanie ──
+  const handleMusicPointerDown = (id: number, e: React.PointerEvent) => {
+    e.stopPropagation();
+    const startX = e.clientX;
+    const mc = musicClips.find(c => c.id === id);
+    const baseStart = mc?.start ?? 0;
+    let didDrag = false;
+    const onMove = (ev: PointerEvent) => {
+      const upd = (x: number) => {
+        const delta = (x - startX) / (PX_PER_SEC * timelineZoom);
+        if (Math.abs(x - startX) > 4) didDrag = true;
+        setMusicClips(prev => prev.map(c => c.id === id ? { ...c, start: Math.max(0, baseStart + delta) } : c));
+      };
+      upd(ev.clientX);
+      edgeAutoScroll(ev.clientX, upd);
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp); window.removeEventListener('pointercancel', onUp);
+      stopEdgeAutoScroll();
+      if (!didDrag) setSelectedMusicId(prev => prev === id ? null : id);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp); window.addEventListener('pointercancel', onUp);
+  };
+
+  const handleMusicTrim = (id: number, e: React.PointerEvent, edge: 'start' | 'end') => {
+    e.stopPropagation(); e.preventDefault();
+    setSelectedMusicId(id);
+    const startX = e.clientX;
+    const mc = musicClips.find(c => c.id === id);
+    const baseStart = mc?.start ?? 0;
+    const baseDur = mc?.duration ?? totalDuration;
+    const onMove = (ev: PointerEvent) => {
+      const upd = (x: number) => {
+        const delta = (x - startX) / (PX_PER_SEC * timelineZoom);
+        setMusicClips(prev => prev.map(c => {
+          if (c.id !== id) return c;
+          if (edge === 'end') return { ...c, start: baseStart, duration: Math.max(1, baseDur + delta) };
+          const maxDelta = baseDur - 1;
+          const d = Math.min(Math.max(delta, -baseStart), maxDelta);
+          return { ...c, start: baseStart + d, duration: baseDur - d };
+        }));
+      };
+      upd(ev.clientX);
+      edgeAutoScroll(ev.clientX, upd);
+    };
+    const onUp = () => { window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); window.removeEventListener('pointercancel', onUp); stopEdgeAutoScroll(); };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp); window.addEventListener('pointercancel', onUp);
+  };
 
   const formatTime = (s: number) => { const m = Math.floor(s / 60); const sec = Math.floor(s % 60); return `${m}:${sec.toString().padStart(2, '0')}`; };
 
@@ -1103,13 +1159,25 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
                         </button>
                       ) : musicClips.map(mc => {
                         const mSel = selectedMusicId === mc.id;
+                        const leftPx = Math.round((mc.start ?? 0) * PX_PER_SEC * timelineZoom);
+                        const widthPx = Math.max(24, Math.round((mc.duration ?? totalDuration) * PX_PER_SEC * timelineZoom));
                         return (
-                          <div key={mc.id} onPointerDown={e => { e.stopPropagation(); const startX = e.clientX; let didDrag = false; const onMove = (ev: PointerEvent) => { if (Math.abs(ev.clientX - startX) > 6) didDrag = true; }; const onUp = () => { window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); window.removeEventListener('pointercancel', onUp); if (!didDrag) setSelectedMusicId(prev => prev === mc.id ? null : mc.id); }; window.addEventListener('pointermove', onMove); window.addEventListener('pointerup', onUp); window.addEventListener('pointercancel', onUp); }}
-                            className="relative flex-1 h-full bg-gradient-to-r from-indigo-700/50 to-violet-600/50 flex items-center px-2 cursor-grab active:cursor-grabbing transition-all hover:brightness-110">
+                          <div key={mc.id} onPointerDown={e => { if (!(e.target as HTMLElement).dataset.handle) handleMusicPointerDown(mc.id, e); }} onClick={e => e.stopPropagation()}
+                            style={{ position: 'absolute', left: leftPx, width: widthPx, top: 0, bottom: 0, touchAction: 'none' }}
+                            className={`bg-gradient-to-r from-indigo-700/50 to-violet-600/50 flex items-center px-2 cursor-grab active:cursor-grabbing transition-all ${mSel ? 'ring-2 ring-amber-400 ring-inset brightness-110' : 'hover:brightness-110'}`}>
                             <div className="flex gap-px w-full items-end pointer-events-none" style={{ height: 20 }}>{WAVEFORM.slice(0, 50).map((h, i) => <div key={i} className="flex-1 bg-white/30 rounded-full" style={{ height: `${h}%` }} />)}</div>
                             <span className="absolute bottom-0.5 left-2 text-[7px] text-white/50 font-medium truncate max-w-[80%] pointer-events-none">{mc.label}</span>
-                            {mSel && <div className="absolute inset-0 border-2 border-white pointer-events-none" />}
+                            {mSel && <div className="absolute inset-0 border-2 border-amber-400 pointer-events-none z-10" />}
+                            <div data-handle="m-trim-start" style={{ touchAction: 'none' }} onPointerDown={e => { e.stopPropagation(); handleMusicTrim(mc.id, e, 'start'); }}
+                              className={`absolute left-0 top-0 bottom-0 w-6 cursor-ew-resize z-20 flex items-center justify-center group/mtrim transition-all ${mSel ? 'bg-amber-400/90' : 'bg-amber-400/0 hover:bg-amber-400/40'}`}>
+                              <div className={`w-0.5 h-5 rounded-full pointer-events-none ${mSel ? 'bg-black/60' : 'bg-amber-400/0 group-hover/mtrim:bg-amber-400'}`} />
+                            </div>
+                            <div data-handle="m-trim-end" style={{ touchAction: 'none' }} onPointerDown={e => { e.stopPropagation(); handleMusicTrim(mc.id, e, 'end'); }}
+                              className={`absolute right-0 top-0 bottom-0 w-6 cursor-ew-resize z-20 flex items-center justify-center group/mtrim transition-all ${mSel ? 'bg-amber-400/90' : 'bg-amber-400/0 hover:bg-amber-400/40'}`}>
+                              <div className={`w-0.5 h-5 rounded-full pointer-events-none ${mSel ? 'bg-black/60' : 'bg-amber-400/0 group-hover/mtrim:bg-amber-400'}`} />
+                            </div>
                           </div>
+
                         );
                       })}
                     </div>
@@ -1141,7 +1209,7 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
       <input ref={mediaInputRef} type="file" accept="video/*,image/*,.mp4,.mov,.webm,.avi,.mkv,.m4v" className="hidden"
         onChange={e => { const f = e.target.files?.[0]; if (f) addMediaFile(f); e.target.value = ''; }} />
       <input ref={musicAudioRef} type="file" accept="audio/*" className="hidden"
-        onChange={e => { const file = e.target.files?.[0]; if (file) setMusicClips(prev => [...prev, { id: Date.now(), label: file.name.replace(/\.[^/.]+$/, ''), src: URL.createObjectURL(file) }]); e.target.value = ''; setShowMusicModal(false); }} />
+        onChange={e => { const file = e.target.files?.[0]; if (file) setMusicClips(prev => [...prev, { id: Date.now(), label: file.name.replace(/\.[^/.]+$/, ''), src: URL.createObjectURL(file), start: 0, duration: totalDuration || 30 }]); e.target.value = ''; setShowMusicModal(false); }} />
       {musicTrack?.src && <audio ref={musicElRef} src={musicTrack.src} className="hidden" preload="auto" loop />}
       <AnimatePresence>
         {showMusicModal && (
