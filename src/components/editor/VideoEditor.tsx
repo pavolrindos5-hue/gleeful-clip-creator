@@ -1142,7 +1142,7 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
         onChange={e => { const f = e.target.files?.[0]; if (f) addMediaFile(f); e.target.value = ''; }} />
       <input ref={musicAudioRef} type="file" accept="audio/*" className="hidden"
         onChange={e => { const file = e.target.files?.[0]; if (file) setMusicClips(prev => [...prev, { id: Date.now(), label: file.name.replace(/\.[^/.]+$/, ''), src: URL.createObjectURL(file) }]); e.target.value = ''; setShowMusicModal(false); }} />
-      {musicTrack?.src && <audio ref={musicElRef} src={musicTrack.src} className="hidden" preload="auto" />}
+      {musicTrack?.src && <audio ref={musicElRef} src={musicTrack.src} className="hidden" preload="auto" loop />}
       <AnimatePresence>
         {showMusicModal && (
           <>
