@@ -281,7 +281,7 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
     return () => clearInterval(id);
   }, [appliedTools]);
 
-  useEffect(() => { setShowCropOverlay(leftTool === 'crop'); }, [leftTool]);
+  
   useEffect(() => { if (videoRef.current) videoRef.current.volume = volume / 100; }, [volume]);
   useEffect(() => { if (videoRef.current) videoRef.current.playbackRate = playbackRate; }, [playbackRate]);
 
