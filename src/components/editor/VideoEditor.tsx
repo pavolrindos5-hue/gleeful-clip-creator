@@ -85,6 +85,23 @@ const LEFT_TOOLS: { id: LeftTool; icon: React.ElementType; label: string; desc: 
 
 const WAVEFORM = Array.from({ length: 50 }, () => Math.random() * 70 + 20);
 
+const CROP_RATIOS: { id: string; label: string; value: number }[] = [
+  { id: '16:9', label: '16:9', value: 16 / 9 },
+  { id: '4:3',  label: '4:3',  value: 4 / 3 },
+  { id: '1:1',  label: '1:1',  value: 1 },
+  { id: '4:5',  label: '4:5',  value: 4 / 5 },
+  { id: '9:16', label: '9:16', value: 9 / 16 },
+];
+
+const PRESETS: { id: string; label: string; filter: string; swatch: string }[] = [
+  { id: 'cinematic', label: 'Cinematic', filter: 'contrast(1.15) saturate(1.1) brightness(0.96) sepia(0.08)', swatch: 'from-slate-700 to-amber-700' },
+  { id: 'vivid',     label: 'Vivid',     filter: 'saturate(1.6) contrast(1.1)',                                swatch: 'from-fuchsia-500 to-amber-400' },
+  { id: 'cold',      label: 'Chladné',   filter: 'saturate(1.05) hue-rotate(-15deg) brightness(1.02)',         swatch: 'from-cyan-500 to-blue-700' },
+  { id: 'warm',      label: 'Teplé',     filter: 'sepia(0.25) saturate(1.2) brightness(1.04)',                 swatch: 'from-amber-400 to-rose-500' },
+  { id: 'bw',        label: 'Čiernobiele', filter: 'grayscale(1) contrast(1.15)',                              swatch: 'from-neutral-200 to-neutral-700' },
+  { id: 'vintage',   label: 'Vintage',   filter: 'sepia(0.45) contrast(0.95) saturate(0.85)',                  swatch: 'from-yellow-700 to-stone-600' },
+];
+
 const PX_PER_SEC = 8;
 const GAP_W = 20;
 
@@ -141,7 +158,11 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
   const [timelineZoom, setTimelineZoom] = useState(1);
   const [leftTool, setLeftTool]         = useState<LeftTool>('select');
   const [subtitleIdx, setSubtitleIdx]   = useState(0);
-  const [showCropOverlay, setShowCropOverlay] = useState(false);
+  const [cropRatio, setCropRatio] = useState<string | null>(null);
+  const [cropZoom, setCropZoom] = useState(1);
+  const [activePreset, setActivePreset] = useState<string | null>(null);
+  const [clipOpacity, setClipOpacity] = useState<Record<number, number>>({});
+  const [hiddenClips, setHiddenClips] = useState<Set<number>>(new Set());
   const [playbackRate, setPlaybackRate] = useState(1);
   const [volume, setVolume]             = useState(80);
   const [tooltipTool, setTooltipTool]   = useState<LeftTool | null>(null);
@@ -260,7 +281,7 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
     return () => clearInterval(id);
   }, [appliedTools]);
 
-  useEffect(() => { setShowCropOverlay(leftTool === 'crop'); }, [leftTool]);
+  
   useEffect(() => { if (videoRef.current) videoRef.current.volume = volume / 100; }, [volume]);
   useEffect(() => { if (videoRef.current) videoRef.current.playbackRate = playbackRate; }, [playbackRate]);
 
@@ -595,8 +616,10 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
     if (appliedTools.has('denoise'))    filters.push('contrast(1.08) saturate(1.12)');
     if (appliedTools.has('enhance'))    filters.push('brightness(1.05) contrast(1.06)');
     if (appliedTools.has('colorgrade')) filters.push('saturate(1.3) hue-rotate(5deg)');
+    const preset = PRESETS.find(p => p.id === activePreset);
+    if (preset) filters.push(preset.filter);
     return filters.join(' ') || undefined;
-  }, [appliedTools, sliders]);
+  }, [appliedTools, sliders, activePreset]);
 
   // ── Reálny export videa (canvas + MediaRecorder) ──
   const [exporting, setExporting] = useState(false);
@@ -604,7 +627,7 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
 
   const handleExport = useCallback(async () => {
     if (exporting) return;
-    const clips = timelineClips.filter(c => c.src);
+    const clips = timelineClips.filter(c => c.src && !hiddenClips.has(c.id));
     if (!clips.length) { alert('Najprv nahraj video alebo obrázok.'); return; }
     setExporting(true);
     setExportPct(0);
@@ -615,16 +638,25 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
       const exportTransitions: Record<number, string> = {};
       let outIdx = 0;
       timelineClips.forEach((c, i) => {
-        if (!c.src) return;
+        if (!c.src || hiddenClips.has(c.id)) return;
         const t = clipTransitions[i];
         if (t && outIdx > 0) exportTransitions[outIdx] = t;
         outIdx++;
       });
+      const ratio = CROP_RATIOS.find(r => r.id === cropRatio)?.value;
       const { blob, ext } = await exportTimeline({
-        clips: clips.map(c => ({ src: c.src, type: c.type, duration: c.duration })),
+        clips: clips.map(c => ({
+          src: c.src,
+          type: c.type,
+          duration: c.duration / playbackRate,
+          opacity: (clipOpacity[c.id] ?? 100) / 100,
+          speed: playbackRate,
+        })),
         filter: videoFilter,
         transitions: exportTransitions,
-        zoom: appliedTools.has('stabilize') ? 1.06 : 1,
+        zoom: (appliedTools.has('stabilize') ? 1.06 : 1) * cropZoom,
+        aspectRatio: ratio,
+        cover: Boolean(ratio) || cropZoom !== 1,
         captions: appliedTools.has('captions') ? [...SUBTITLE_LINES] : undefined,
         onProgress: setExportPct,
       });
@@ -637,10 +669,12 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
       setExporting(false);
       setExportPct(0);
     }
-  }, [exporting, timelineClips, videoFilter, videoName, clipTransitions, appliedTools]);
+  }, [exporting, timelineClips, videoFilter, videoName, clipTransitions, appliedTools, hiddenClips, clipOpacity, cropRatio, cropZoom, playbackRate]);
 
   // AI stabilizácia = jemné priblíženie (rovnaké aj v exporte)
-  const mediaTransform = appliedTools.has('stabilize') ? 'scale(1.06)' : undefined;
+  const mediaTransform = `${appliedTools.has('stabilize') ? 'scale(1.06) ' : ''}${cropZoom !== 1 ? `scale(${cropZoom})` : ''}`.trim() || undefined;
+  const previewOpacity = previewClip ? (clipOpacity[previewClip.id] ?? 100) / 100 : 1;
+  const cropAspect = CROP_RATIOS.find(r => r.id === cropRatio)?.value;
 
 
 
@@ -802,20 +836,117 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
           )}
         </AnimatePresence>
 
+        {/* Crop panel */}
+        <AnimatePresence>
+          {leftTool === 'crop' && (
+            <motion.div initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }} transition={{ duration: 0.18 }}
+              className="absolute left-11 top-0 z-30 w-52 bg-card border border-primary/20 rounded-r-xl rounded-b-xl shadow-2xl p-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Orez</p>
+                <button onClick={() => setLeftTool('select')} className="text-muted-foreground hover:text-foreground p-0.5"><X className="w-3.5 h-3.5" /></button>
+              </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                {CROP_RATIOS.map(r => (
+                  <button key={r.id} onClick={() => setCropRatio(cropRatio === r.id ? null : r.id)}
+                    className={`text-[10px] font-bold py-1.5 rounded-lg border transition-all ${cropRatio === r.id ? 'border-primary bg-primary/20 text-primary' : 'border-primary/15 bg-card/60 text-muted-foreground hover:text-primary hover:border-primary/40'}`}>
+                    {r.label}
+                  </button>
+                ))}
+                <button onClick={() => { setCropRatio(null); setCropZoom(1); }}
+                  className="text-[10px] font-bold py-1.5 rounded-lg border border-primary/15 bg-card/60 text-muted-foreground hover:text-primary hover:border-primary/40">Reset</button>
+              </div>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-xs font-medium"><span>Priblíženie</span><span className="text-[10px] font-mono text-primary">{cropZoom.toFixed(2)}×</span></div>
+                <input type="range" min={100} max={250} value={Math.round(cropZoom * 100)} onChange={e => setCropZoom(Number(e.target.value) / 100)} className="w-full accent-violet-500 cursor-pointer" />
+              </div>
+              <p className="text-[9px] text-muted-foreground">Orez sa prejaví v náhľade aj v exportovanom videu.</p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Layers panel */}
+        <AnimatePresence>
+          {leftTool === 'layers' && (
+            <motion.div initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }} transition={{ duration: 0.18 }}
+              className="absolute left-11 top-0 z-30 w-60 bg-card border border-primary/20 rounded-r-xl rounded-b-xl shadow-2xl p-3 space-y-2 overflow-y-auto max-h-[75vh]">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Vrstvy</p>
+                <button onClick={() => setLeftTool('select')} className="text-muted-foreground hover:text-foreground p-0.5"><X className="w-3.5 h-3.5" /></button>
+              </div>
+              {timelineClips.length === 0 && <p className="text-[10px] text-muted-foreground">Žiadne klipy.</p>}
+              {timelineClips.map((c, i) => {
+                const op = clipOpacity[c.id] ?? 100;
+                const hidden = hiddenClips.has(c.id);
+                return (
+                  <div key={c.id} className={`rounded-lg border p-2 space-y-1.5 ${selectedClipId === c.id ? 'border-primary/50 bg-primary/5' : 'border-primary/10 bg-card/60'}`}>
+                    <div className="flex items-center gap-1.5">
+                      <button onClick={() => setSelectedClipId(c.id)} className="flex-1 text-left text-[11px] font-semibold truncate text-foreground">{i + 1}. {c.label}</button>
+                      <button title={hidden ? 'Zobraziť' : 'Skryť'} onClick={() => setHiddenClips(s => { const n = new Set(s); if (n.has(c.id)) n.delete(c.id); else n.add(c.id); return n; })}
+                        className={`text-[10px] px-1.5 py-0.5 rounded ${hidden ? 'bg-red-500/15 text-red-400' : 'bg-primary/10 text-primary'}`}>{hidden ? 'skryté' : 'vid.'}</button>
+                      <button title="Hore" disabled={i === 0} onClick={() => setTimelineClips(prev => { const n = [...prev]; const [m] = n.splice(i, 1); n.splice(i - 1, 0, m); return n; })}
+                        className="text-muted-foreground hover:text-primary disabled:opacity-30 text-[11px] px-1">▲</button>
+                      <button title="Dole" disabled={i === timelineClips.length - 1} onClick={() => setTimelineClips(prev => { const n = [...prev]; const [m] = n.splice(i, 1); n.splice(i + 1, 0, m); return n; })}
+                        className="text-muted-foreground hover:text-primary disabled:opacity-30 text-[11px] px-1">▼</button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] text-muted-foreground w-14">Priehľ.</span>
+                      <input type="range" min={0} max={100} value={op} onChange={e => setClipOpacity(p => ({ ...p, [c.id]: Number(e.target.value) }))} className="flex-1 accent-violet-500 cursor-pointer" />
+                      <span className="text-[9px] font-mono text-primary w-7 text-right">{op}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Presets panel */}
+        <AnimatePresence>
+          {leftTool === 'presets' && (
+            <motion.div initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }} transition={{ duration: 0.18 }}
+              className="absolute left-11 top-0 z-30 w-56 bg-card border border-primary/20 rounded-r-xl rounded-b-xl shadow-2xl p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Predvoľby</p>
+                <button onClick={() => setLeftTool('select')} className="text-muted-foreground hover:text-foreground p-0.5"><X className="w-3.5 h-3.5" /></button>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {PRESETS.map(p => (
+                  <button key={p.id} onClick={() => setActivePreset(activePreset === p.id ? null : p.id)}
+                    className={`rounded-lg border p-1.5 text-left transition-all ${activePreset === p.id ? 'border-primary bg-primary/15' : 'border-primary/10 hover:border-primary/40'}`}>
+                    <div className={`w-full h-8 rounded bg-gradient-to-br ${p.swatch} mb-1`} style={{ filter: p.filter }} />
+                    <span className={`text-[9px] font-semibold ${activePreset === p.id ? 'text-primary' : 'text-muted-foreground'}`}>{p.label}</span>
+                  </button>
+                ))}
+              </div>
+              <button onClick={() => { setActivePreset(null); setSliders({ jas: 50, kontrast: 50, sytost: 50 }); }}
+                className="w-full text-[10px] font-semibold py-1.5 rounded-lg border border-primary/15 text-muted-foreground hover:text-primary">Zrušiť predvoľbu</button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+
+
         {/* Center: Video Preview */}
         <div className="flex-1 flex flex-col bg-black relative overflow-hidden min-w-0" onClick={leftTool === 'cut' ? handleCut : undefined} style={{ cursor: leftTool === 'cut' ? 'crosshair' : leftTool === 'crop' ? 'nwse-resize' : 'default' }}>
           <div className="flex-1 relative overflow-hidden min-h-0">
             {previewClip?.src ? (
               <motion.div
                 key={playingTransition ? `tr-${playingTransition.key}` : 'media'}
-                className="absolute inset-0"
+                className="absolute inset-0 flex items-center justify-center"
                 initial={playingTransition ? (TRANSITION_ANIM[playingTransition.id] ?? TRANSITION_ANIM.fade).initial : false}
                 animate={playingTransition ? (TRANSITION_ANIM[playingTransition.id] ?? TRANSITION_ANIM.fade).animate : { opacity: 1 }}
                 transition={{ duration: 0.7, ease: 'easeInOut' }}
               >
-                {previewClip.type === 'image'
-                  ? <img key={previewClip.id} src={previewClip.src} className="w-full h-full object-contain" style={{ filter: videoFilter, transform: mediaTransform }} alt={previewClip.label} />
-                  : <video key={previewClip.id} ref={videoRef} src={previewClip.src} className="w-full h-full object-contain" style={{ filter: videoFilter, transform: mediaTransform }} onTimeUpdate={handleTimeUpdate} onEnded={() => setIsPlaying(false)} muted={isMuted} />}
+                <div
+                  className="relative overflow-hidden max-w-full max-h-full"
+                  style={cropAspect
+                    ? { aspectRatio: String(cropAspect), height: '100%', width: 'auto', maxWidth: '100%' }
+                    : { width: '100%', height: '100%' }}
+                >
+                  {previewClip.type === 'image'
+                    ? <img key={previewClip.id} src={previewClip.src} className={`w-full h-full ${cropAspect ? 'object-cover' : 'object-contain'}`} style={{ filter: videoFilter, transform: mediaTransform, opacity: previewOpacity }} alt={previewClip.label} />
+                    : <video key={previewClip.id} ref={videoRef} src={previewClip.src} className={`w-full h-full ${cropAspect ? 'object-cover' : 'object-contain'}`} style={{ filter: videoFilter, transform: mediaTransform, opacity: previewOpacity }} onTimeUpdate={handleTimeUpdate} onEnded={() => setIsPlaying(false)} muted={isMuted} />}
+                </div>
               </motion.div>
             ) : (
               <div className="w-full h-full flex items-center justify-center"><div className="text-center space-y-3 opacity-40"><Film className="w-20 h-20 mx-auto text-primary/40" /><p className="text-muted-foreground text-sm">Žiadne video nevybrané</p></div></div>
@@ -872,11 +1003,11 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
             </AnimatePresence>
 
             <AnimatePresence>
-              {showCropOverlay && (
+              {leftTool === 'crop' && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 pointer-events-none">
                   <div className="absolute inset-0 bg-black/40" />
                   <div className="absolute inset-[10%] border-2 border-white/70 rounded-sm shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]">
-                    <p className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white/60 text-xs font-semibold">Orez aktívny</p>
+                    <p className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white/60 text-xs font-semibold">Orez / kompozícia</p>
                   </div>
                 </motion.div>
               )}

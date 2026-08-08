@@ -5,6 +5,10 @@ export type ExportClip = {
   src?: string;
   type?: 'video' | 'image';
   duration: number; // sekundy
+  /** priehľadnosť klipu 0..1 (vrstvy) */
+  opacity?: number;
+  /** rýchlosť prehrávania videa */
+  speed?: number;
 };
 
 export type ExportOptions = {
@@ -20,6 +24,10 @@ export type ExportOptions = {
   zoom?: number | undefined;
   /** titulky vypálené do videa */
   captions?: string[] | undefined;
+  /** cieľový pomer strán (orez) */
+  aspectRatio?: number | undefined;
+  /** vyplniť celý rám namiesto vloženia (orez) */
+  cover?: boolean | undefined;
 };
 
 function pickMime(): { mime: string; ext: string } {
@@ -64,11 +72,12 @@ function drawCover(
   media: HTMLVideoElement | HTMLImageElement,
   w: number,
   h: number,
+  cover = false,
 ) {
   const mw = media instanceof HTMLVideoElement ? media.videoWidth : media.naturalWidth;
   const mh = media instanceof HTMLVideoElement ? media.videoHeight : media.naturalHeight;
   if (!mw || !mh) return;
-  const scale = Math.min(w / mw, h / mh);
+  const scale = cover ? Math.max(w / mw, h / mh) : Math.min(w / mw, h / mh);
   const dw = mw * scale;
   const dh = mh * scale;
   ctx.drawImage(media, (w - dw) / 2, (h - dh) / 2, dw, dh);
@@ -101,6 +110,10 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
     const h = first.kind === 'video' ? first.el.videoHeight : first.el.naturalHeight;
     width = w || 1280;
     height = h || 720;
+  }
+  if (opts.aspectRatio) {
+    // orez na cieľový pomer strán (zachovaj plochu podľa šírky)
+    height = Math.round(width / opts.aspectRatio);
   }
   // Párne rozmery kvôli kodekom
   width = Math.max(2, Math.round(width / 2) * 2);
@@ -148,6 +161,7 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
   const transitions = opts.transitions ?? {};
   const zoom = opts.zoom ?? 1;
   const captions = opts.captions ?? [];
+  const coverMode = opts.cover ?? false;
   const TR_DUR = 0.7;
 
   // snímka predchádzajúceho klipu (pre prechody)
@@ -157,15 +171,16 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
   const prevCtx = prevCanvas.getContext('2d');
   let hasPrev = false;
 
-  const drawMedia = (media: HTMLVideoElement | HTMLImageElement, filter: string) => {
+  const drawMedia = (media: HTMLVideoElement | HTMLImageElement, filter: string, alpha = 1) => {
     ctx.save();
+    ctx.globalAlpha = alpha;
     ctx.filter = filter;
     if (zoom !== 1) {
       ctx.translate(width / 2, height / 2);
       ctx.scale(zoom, zoom);
       ctx.translate(-width / 2, -height / 2);
     }
-    drawCover(ctx, media, width, height);
+    drawCover(ctx, media, width, height, coverMode);
     ctx.restore();
   };
 
@@ -270,7 +285,7 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
     if (zoom !== 1) {
       ctx.translate(width / 2, height / 2); ctx.scale(zoom, zoom); ctx.translate(-width / 2, -height / 2);
     }
-    drawCover(ctx, media, width, height);
+    drawCover(ctx, media, width, height, coverMode);
     ctx.restore();
   };
 
@@ -278,9 +293,11 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
     const item = prepared[i];
     const transitionId = i > 0 ? transitions[i] : undefined;
     const startWall = performance.now();
+    const clipOpacity = clips[i]?.opacity ?? 1;
     if (item.kind === 'video') {
       const v = item.el;
       try { v.currentTime = 0; } catch { /* ignore */ }
+      v.playbackRate = clips[i]?.speed ?? 1;
       await v.play().catch(() => undefined);
     }
 
@@ -298,7 +315,7 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
           const p = raw < 0.5 ? 2 * raw * raw : 1 - Math.pow(-2 * raw + 2, 2) / 2; // easeInOut
           drawTransition(transitionId, p, item.el);
         } else {
-          drawMedia(item.el, cssFilter);
+          drawMedia(item.el, cssFilter, clipOpacity);
         }
         drawCaption(elapsedBefore + t);
 
