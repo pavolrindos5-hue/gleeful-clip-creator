@@ -158,7 +158,6 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
   const [timelineZoom, setTimelineZoom] = useState(1);
   const [leftTool, setLeftTool]         = useState<LeftTool>('select');
   const [subtitleIdx, setSubtitleIdx]   = useState(0);
-  const [showCropOverlay, setShowCropOverlay] = useState(false);
   const [cropRatio, setCropRatio] = useState<string | null>(null);
   const [cropZoom, setCropZoom] = useState(1);
   const [activePreset, setActivePreset] = useState<string | null>(null);
@@ -1004,11 +1003,11 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
             </AnimatePresence>
 
             <AnimatePresence>
-              {showCropOverlay && (
+              {leftTool === 'crop' && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 pointer-events-none">
                   <div className="absolute inset-0 bg-black/40" />
                   <div className="absolute inset-[10%] border-2 border-white/70 rounded-sm shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]">
-                    <p className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white/60 text-xs font-semibold">Orez aktívny</p>
+                    <p className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white/60 text-xs font-semibold">Orez / kompozícia</p>
                   </div>
                 </motion.div>
               )}
