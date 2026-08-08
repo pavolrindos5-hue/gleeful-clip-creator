@@ -837,6 +837,96 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
           )}
         </AnimatePresence>
 
+        {/* Crop panel */}
+        <AnimatePresence>
+          {leftTool === 'crop' && (
+            <motion.div initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }} transition={{ duration: 0.18 }}
+              className="absolute left-11 top-0 z-30 w-52 bg-card border border-primary/20 rounded-r-xl rounded-b-xl shadow-2xl p-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Orez</p>
+                <button onClick={() => setLeftTool('select')} className="text-muted-foreground hover:text-foreground p-0.5"><X className="w-3.5 h-3.5" /></button>
+              </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                {CROP_RATIOS.map(r => (
+                  <button key={r.id} onClick={() => setCropRatio(cropRatio === r.id ? null : r.id)}
+                    className={`text-[10px] font-bold py-1.5 rounded-lg border transition-all ${cropRatio === r.id ? 'border-primary bg-primary/20 text-primary' : 'border-primary/15 bg-card/60 text-muted-foreground hover:text-primary hover:border-primary/40'}`}>
+                    {r.label}
+                  </button>
+                ))}
+                <button onClick={() => { setCropRatio(null); setCropZoom(1); }}
+                  className="text-[10px] font-bold py-1.5 rounded-lg border border-primary/15 bg-card/60 text-muted-foreground hover:text-primary hover:border-primary/40">Reset</button>
+              </div>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-xs font-medium"><span>Priblíženie</span><span className="text-[10px] font-mono text-primary">{cropZoom.toFixed(2)}×</span></div>
+                <input type="range" min={100} max={250} value={Math.round(cropZoom * 100)} onChange={e => setCropZoom(Number(e.target.value) / 100)} className="w-full accent-violet-500 cursor-pointer" />
+              </div>
+              <p className="text-[9px] text-muted-foreground">Orez sa prejaví v náhľade aj v exportovanom videu.</p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Layers panel */}
+        <AnimatePresence>
+          {leftTool === 'layers' && (
+            <motion.div initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }} transition={{ duration: 0.18 }}
+              className="absolute left-11 top-0 z-30 w-60 bg-card border border-primary/20 rounded-r-xl rounded-b-xl shadow-2xl p-3 space-y-2 overflow-y-auto max-h-[75vh]">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Vrstvy</p>
+                <button onClick={() => setLeftTool('select')} className="text-muted-foreground hover:text-foreground p-0.5"><X className="w-3.5 h-3.5" /></button>
+              </div>
+              {timelineClips.length === 0 && <p className="text-[10px] text-muted-foreground">Žiadne klipy.</p>}
+              {timelineClips.map((c, i) => {
+                const op = clipOpacity[c.id] ?? 100;
+                const hidden = hiddenClips.has(c.id);
+                return (
+                  <div key={c.id} className={`rounded-lg border p-2 space-y-1.5 ${selectedClipId === c.id ? 'border-primary/50 bg-primary/5' : 'border-primary/10 bg-card/60'}`}>
+                    <div className="flex items-center gap-1.5">
+                      <button onClick={() => setSelectedClipId(c.id)} className="flex-1 text-left text-[11px] font-semibold truncate text-foreground">{i + 1}. {c.label}</button>
+                      <button title={hidden ? 'Zobraziť' : 'Skryť'} onClick={() => setHiddenClips(s => { const n = new Set(s); if (n.has(c.id)) n.delete(c.id); else n.add(c.id); return n; })}
+                        className={`text-[10px] px-1.5 py-0.5 rounded ${hidden ? 'bg-red-500/15 text-red-400' : 'bg-primary/10 text-primary'}`}>{hidden ? 'skryté' : 'vid.'}</button>
+                      <button title="Hore" disabled={i === 0} onClick={() => setTimelineClips(prev => { const n = [...prev]; const [m] = n.splice(i, 1); n.splice(i - 1, 0, m); return n; })}
+                        className="text-muted-foreground hover:text-primary disabled:opacity-30 text-[11px] px-1">▲</button>
+                      <button title="Dole" disabled={i === timelineClips.length - 1} onClick={() => setTimelineClips(prev => { const n = [...prev]; const [m] = n.splice(i, 1); n.splice(i + 1, 0, m); return n; })}
+                        className="text-muted-foreground hover:text-primary disabled:opacity-30 text-[11px] px-1">▼</button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] text-muted-foreground w-14">Priehľ.</span>
+                      <input type="range" min={0} max={100} value={op} onChange={e => setClipOpacity(p => ({ ...p, [c.id]: Number(e.target.value) }))} className="flex-1 accent-violet-500 cursor-pointer" />
+                      <span className="text-[9px] font-mono text-primary w-7 text-right">{op}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Presets panel */}
+        <AnimatePresence>
+          {leftTool === 'presets' && (
+            <motion.div initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }} transition={{ duration: 0.18 }}
+              className="absolute left-11 top-0 z-30 w-56 bg-card border border-primary/20 rounded-r-xl rounded-b-xl shadow-2xl p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Predvoľby</p>
+                <button onClick={() => setLeftTool('select')} className="text-muted-foreground hover:text-foreground p-0.5"><X className="w-3.5 h-3.5" /></button>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {PRESETS.map(p => (
+                  <button key={p.id} onClick={() => setActivePreset(activePreset === p.id ? null : p.id)}
+                    className={`rounded-lg border p-1.5 text-left transition-all ${activePreset === p.id ? 'border-primary bg-primary/15' : 'border-primary/10 hover:border-primary/40'}`}>
+                    <div className={`w-full h-8 rounded bg-gradient-to-br ${p.swatch} mb-1`} style={{ filter: p.filter }} />
+                    <span className={`text-[9px] font-semibold ${activePreset === p.id ? 'text-primary' : 'text-muted-foreground'}`}>{p.label}</span>
+                  </button>
+                ))}
+              </div>
+              <button onClick={() => { setActivePreset(null); setSliders({ jas: 50, kontrast: 50, sytost: 50 }); }}
+                className="w-full text-[10px] font-semibold py-1.5 rounded-lg border border-primary/15 text-muted-foreground hover:text-primary">Zrušiť predvoľbu</button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+
+
         {/* Center: Video Preview */}
         <div className="flex-1 flex flex-col bg-black relative overflow-hidden min-w-0" onClick={leftTool === 'cut' ? handleCut : undefined} style={{ cursor: leftTool === 'cut' ? 'crosshair' : leftTool === 'crop' ? 'nwse-resize' : 'default' }}>
           <div className="flex-1 relative overflow-hidden min-h-0">
