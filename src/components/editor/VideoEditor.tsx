@@ -617,8 +617,10 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
     if (appliedTools.has('denoise'))    filters.push('contrast(1.08) saturate(1.12)');
     if (appliedTools.has('enhance'))    filters.push('brightness(1.05) contrast(1.06)');
     if (appliedTools.has('colorgrade')) filters.push('saturate(1.3) hue-rotate(5deg)');
+    const preset = PRESETS.find(p => p.id === activePreset);
+    if (preset) filters.push(preset.filter);
     return filters.join(' ') || undefined;
-  }, [appliedTools, sliders]);
+  }, [appliedTools, sliders, activePreset]);
 
   // ── Reálny export videa (canvas + MediaRecorder) ──
   const [exporting, setExporting] = useState(false);
@@ -626,7 +628,7 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
 
   const handleExport = useCallback(async () => {
     if (exporting) return;
-    const clips = timelineClips.filter(c => c.src);
+    const clips = timelineClips.filter(c => c.src && !hiddenClips.has(c.id));
     if (!clips.length) { alert('Najprv nahraj video alebo obrázok.'); return; }
     setExporting(true);
     setExportPct(0);
@@ -637,16 +639,25 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
       const exportTransitions: Record<number, string> = {};
       let outIdx = 0;
       timelineClips.forEach((c, i) => {
-        if (!c.src) return;
+        if (!c.src || hiddenClips.has(c.id)) return;
         const t = clipTransitions[i];
         if (t && outIdx > 0) exportTransitions[outIdx] = t;
         outIdx++;
       });
+      const ratio = CROP_RATIOS.find(r => r.id === cropRatio)?.value;
       const { blob, ext } = await exportTimeline({
-        clips: clips.map(c => ({ src: c.src, type: c.type, duration: c.duration })),
+        clips: clips.map(c => ({
+          src: c.src,
+          type: c.type,
+          duration: c.duration / playbackRate,
+          opacity: (clipOpacity[c.id] ?? 100) / 100,
+          speed: playbackRate,
+        })),
         filter: videoFilter,
         transitions: exportTransitions,
-        zoom: appliedTools.has('stabilize') ? 1.06 : 1,
+        zoom: (appliedTools.has('stabilize') ? 1.06 : 1) * cropZoom,
+        aspectRatio: ratio,
+        cover: Boolean(ratio) || cropZoom !== 1,
         captions: appliedTools.has('captions') ? [...SUBTITLE_LINES] : undefined,
         onProgress: setExportPct,
       });
@@ -659,10 +670,12 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
       setExporting(false);
       setExportPct(0);
     }
-  }, [exporting, timelineClips, videoFilter, videoName, clipTransitions, appliedTools]);
+  }, [exporting, timelineClips, videoFilter, videoName, clipTransitions, appliedTools, hiddenClips, clipOpacity, cropRatio, cropZoom, playbackRate]);
 
   // AI stabilizácia = jemné priblíženie (rovnaké aj v exporte)
-  const mediaTransform = appliedTools.has('stabilize') ? 'scale(1.06)' : undefined;
+  const mediaTransform = `${appliedTools.has('stabilize') ? 'scale(1.06) ' : ''}${cropZoom !== 1 ? `scale(${cropZoom})` : ''}`.trim() || undefined;
+  const previewOpacity = previewClip ? (clipOpacity[previewClip.id] ?? 100) / 100 : 1;
+  const cropAspect = CROP_RATIOS.find(r => r.id === cropRatio)?.value;
 
 
 
