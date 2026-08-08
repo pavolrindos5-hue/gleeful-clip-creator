@@ -85,6 +85,23 @@ const LEFT_TOOLS: { id: LeftTool; icon: React.ElementType; label: string; desc: 
 
 const WAVEFORM = Array.from({ length: 50 }, () => Math.random() * 70 + 20);
 
+const CROP_RATIOS: { id: string; label: string; value: number }[] = [
+  { id: '16:9', label: '16:9', value: 16 / 9 },
+  { id: '4:3',  label: '4:3',  value: 4 / 3 },
+  { id: '1:1',  label: '1:1',  value: 1 },
+  { id: '4:5',  label: '4:5',  value: 4 / 5 },
+  { id: '9:16', label: '9:16', value: 9 / 16 },
+];
+
+const PRESETS: { id: string; label: string; filter: string; swatch: string }[] = [
+  { id: 'cinematic', label: 'Cinematic', filter: 'contrast(1.15) saturate(1.1) brightness(0.96) sepia(0.08)', swatch: 'from-slate-700 to-amber-700' },
+  { id: 'vivid',     label: 'Vivid',     filter: 'saturate(1.6) contrast(1.1)',                                swatch: 'from-fuchsia-500 to-amber-400' },
+  { id: 'cold',      label: 'Chladné',   filter: 'saturate(1.05) hue-rotate(-15deg) brightness(1.02)',         swatch: 'from-cyan-500 to-blue-700' },
+  { id: 'warm',      label: 'Teplé',     filter: 'sepia(0.25) saturate(1.2) brightness(1.04)',                 swatch: 'from-amber-400 to-rose-500' },
+  { id: 'bw',        label: 'Čiernobiele', filter: 'grayscale(1) contrast(1.15)',                              swatch: 'from-neutral-200 to-neutral-700' },
+  { id: 'vintage',   label: 'Vintage',   filter: 'sepia(0.45) contrast(0.95) saturate(0.85)',                  swatch: 'from-yellow-700 to-stone-600' },
+];
+
 const PX_PER_SEC = 8;
 const GAP_W = 20;
 
