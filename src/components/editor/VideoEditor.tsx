@@ -459,17 +459,26 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
   };
 
   const handleCut = () => {
+    if (!timelineClips.length) { toast.error('Na časovej osi nie sú žiadne klipy.'); return; }
     let cumDur = 0, targetIdx = -1, splitOffset = 0;
     for (let i = 0; i < timelineClips.length; i++) {
       const c = timelineClips[i];
       if (currentTime >= cumDur && currentTime < cumDur + c.duration) { targetIdx = i; splitOffset = currentTime - cumDur; break; }
       cumDur += c.duration;
     }
-    if (targetIdx === -1 || splitOffset < 0.5 || splitOffset > timelineClips[targetIdx].duration - 0.5) return;
+    if (targetIdx === -1) {
+      targetIdx = timelineClips.length - 1;
+      splitOffset = timelineClips[targetIdx].duration / 2;
+    }
     const src = timelineClips[targetIdx];
+    const MIN = 0.2;
+    if (src.duration < MIN * 2) { toast.error('Klip je príliš krátky na rozdelenie.'); return; }
+    splitOffset = Math.min(Math.max(splitOffset, MIN), src.duration - MIN);
     const partA: TimelineClip = { ...src, duration: splitOffset };
     const partB: TimelineClip = { ...src, id: Date.now(), label: src.label + ' B', duration: src.duration - splitOffset };
     setTimelineClips(prev => { const n = [...prev]; n.splice(targetIdx, 1, partA, partB); return n; });
+    setSelectedClipId(partB.id);
+    toast.success(`Klip rozdelený na ${splitOffset.toFixed(1)}s`);
   };
 
   const handleClipPointerDown = (clipId: number, e: React.PointerEvent) => {
