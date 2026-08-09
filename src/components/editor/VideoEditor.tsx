@@ -1014,12 +1014,22 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
 
             <AnimatePresence>
               {leftTool === 'crop' && (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 pointer-events-none">
-                  <div className="absolute inset-0 bg-black/40" />
-                  <div className="absolute inset-[10%] border-2 border-white/70 rounded-sm shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]">
-                    <p className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white/60 text-xs font-semibold">Orez / kompozícia</p>
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                  <div
+                    className="relative border-2 border-white/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]"
+                    style={cropAspect
+                      ? { aspectRatio: String(cropAspect), height: '92%', width: 'auto', maxWidth: '92%' }
+                      : { width: '92%', height: '92%' }}
+                  >
+                    <div className="absolute inset-0 grid grid-cols-3 grid-rows-3">
+                      {Array.from({ length: 9 }).map((_, i) => <div key={i} className="border border-white/20" />)}
+                    </div>
+                    <span className="absolute -top-5 left-0 text-[10px] font-bold text-white/80">
+                      {cropRatio ? CROP_RATIOS.find(r => r.id === cropRatio)?.label : 'Pôvodný pomer'} · {cropZoom.toFixed(2)}×
+                    </span>
                   </div>
                 </motion.div>
+
               )}
             </AnimatePresence>
 
