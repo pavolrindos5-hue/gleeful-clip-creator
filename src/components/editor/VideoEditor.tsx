@@ -937,7 +937,7 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
 
 
         {/* Center: Video Preview */}
-        <div className="flex-1 flex flex-col bg-black relative overflow-hidden min-w-0" onClick={leftTool === 'cut' ? handleCut : undefined} style={{ cursor: leftTool === 'cut' ? 'crosshair' : leftTool === 'crop' ? 'nwse-resize' : 'default' }}>
+        <div className="flex-1 flex flex-col bg-black relative overflow-hidden min-w-0" style={{ cursor: leftTool === 'crop' ? 'nwse-resize' : 'default' }}>
           <div className="flex-1 relative overflow-hidden min-h-0">
             {previewClip?.src ? (
               <motion.div
