@@ -9,6 +9,7 @@ import {
   Maximize2, AlignLeft, PanelRightClose, PanelRightOpen,
   Headphones, FileMusic, Shuffle, SlidersHorizontal,
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 
 interface VideoEditorProps {
