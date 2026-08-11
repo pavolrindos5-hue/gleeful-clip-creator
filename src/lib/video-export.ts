@@ -186,10 +186,10 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
     
 
       audioDest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
-    }
-  } catch {
-    // audio je voliteľné – pokračujeme bez neho
   }
+} catch {
+  // audio je voliteľné - pokračujeme bez neho
+}
 
   const { mime, ext } = pickMime();
   const recorder = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 8_000_000 } : undefined);
