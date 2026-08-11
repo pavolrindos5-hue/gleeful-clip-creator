@@ -182,15 +182,13 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
       } catch (e) {
         console.error("Chyba audio exportu:", e);
       }
-    }   
-    
+    }
 
-      audioDest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
+    audioDest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
   }
 } catch {
-  // audio je voliteľné - pokračujeme bez neho
+  // audio je volitelne - pokracujeme bez neho
 }
-
   const { mime, ext } = pickMime();
   const recorder = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 8_000_000 } : undefined);
   const chunks: BlobPart[] = [];
