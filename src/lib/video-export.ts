@@ -147,14 +147,14 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Canvas nie je dostupný.');
 
-  // 1. Vytvorenie AudioContextu a výstupného streamu
+  // 1. Vytvorenie AudioContextu a zvukov do streamu
   const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
   if (audioCtx.state === 'suspended') {
     await audioCtx.resume();
   }
   const audioDest = audioCtx.createMediaStreamDestination();
 
-  // 2. Dekódovanie a pripojenie hudobnej stopy
+  // 2. Dekódovanie a pridanie hudby
   if (opts.music?.src) {
     try {
       const response = await fetch(opts.music.src);
@@ -172,26 +172,21 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
 
       sourceNode.start(0, opts.music.start ?? 0);
     } catch (e) {
-      console.error("Chyba načítania zvuku:", e);
+      console.error("Chyba audio exportu:", e);
     }
   }
 
-  // 3. Spojenie obrazového streamu (Canvas) a zvukového streamu (AudioDest) do jedného MediaStreamu
+  // 3. Zostavenie spoločné stopy (Video z Canvasu + Audio z AudioDest)
   const canvasStream = canvas.captureStream(fps);
   const combinedStream = new MediaStream([
     ...canvasStream.getVideoTracks(),
     ...audioDest.stream.getAudioTracks()
   ]);
 
-  // 4. MediaRecorder MUSÍ použiť combinedStream (nie len samotný canvas stream)
+  // 4. Rekordér dostane spojený stream od začiatku
   const recorder = new MediaRecorder(combinedStream, {
-    mimeType: 'video/webm;codecs=vp9,opus' // Opus kodek pre vysokú kvalitu zvuku
+    mimeType: 'video/webm;codecs=vp9,opus'
   });
-      console.error("Chyba audio exportu (decodeAudioData):", e);
-    }
-  }
- audioDest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
-  }
 } catch {
   // audio je volitelne - pokracujeme bez neho
 }
