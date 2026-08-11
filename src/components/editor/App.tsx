@@ -11,18 +11,18 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
  const handleFile = useCallback((file: File) => {
-    const isImage = file.type.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(file.name);
-    const isVideo = file.type.startsWith('video/') || /\.(mp4|mov|webm|mkv)$/i.test(file.name);
+    if (!file) return;
 
-    if (!isImage && !isVideo) {
-      alert('Nepodporovaný formát. Použi video alebo fotku.');
-      return;
-    }
+    const isImg = file.type.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(file.name);
+    const isVid = file.type.startsWith('video/') || /\.(mp4|mov|webm|mkv|avi)$/i.test(file.name);
 
     const url = URL.createObjectURL(file);
-    setMedia({ url, name: file.name, isImage });
+    setMedia({ 
+      url, 
+      name: file.name, 
+      isImage: isImg || !isVid 
+    });
   }, []);
-
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);

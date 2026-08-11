@@ -158,31 +158,35 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
       if (audioCtx.state === 'suspended') await audioCtx.resume().catch(() => undefined);
 
  // Samostatná hudobná stopa pridaná v editore
-    if (opts.music?.src && audioCtx && audioDest) {
-      try {
-        musicEl = new Audio();
-        musicEl.crossOrigin = 'anonymous';
-        musicEl.src = opts.music.src;
-
-        await new Promise<void>((resolve) => {
-          const done = () => resolve();
-          musicEl!.oncanplaythrough = done;
-          musicEl!.onerror = done;
-          setTimeout(done, 4000);
-        });
-
-        const musicSrcNode = audioCtx.createMediaElementSource(musicEl);
-        const gainNode = audioCtx.createGain();
-        gainNode.gain.value = opts.music.volume ?? 1;
-        musicSrcNode.connect(gainNode);
-        gainNode.connect(audioDest);
-
-        musicEl.currentTime = opts.music.start ?? 0;
-        musicEl.play().catch(() => {});
-      } catch (e) {
-        console.error("Chyba audio exportu:", e);
+  if (opts.music?.src && audioCtx && audioDest) {
+    try {
+      if (audioCtx.state === 'suspended') {
+        await audioCtx.resume();
       }
+
+      musicEl = new Audio();
+      musicEl.crossOrigin = 'anonymous';
+      musicEl.src = opts.music.src;
+
+      await new Promise<void>((resolve) => {
+        const done = () => resolve();
+        musicEl!.oncanplaythrough = done;
+        musicEl!.onerror = done;
+        setTimeout(done, 4000);
+      });
+
+      const musicSrcNode = audioCtx.createMediaElementSource(musicEl);
+      const gainNode = audioCtx.createGain();
+      gainNode.gain.value = opts.music.volume ?? 1;
+      musicSrcNode.connect(gainNode);
+      gainNode.connect(audioDest);
+
+      musicEl.currentTime = opts.music.start ?? 0;
+      await musicEl.play();
+    } catch (e) {
+      console.error("Chyba audio exportu:", e);
     }
+  }
 
  audioDest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
   }
