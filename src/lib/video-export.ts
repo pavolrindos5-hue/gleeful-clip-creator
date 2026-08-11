@@ -184,7 +184,7 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
       }
     }
 
-    audioDest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
+ audioDest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
   }
 } catch {
   // audio je volitelne - pokracujeme bez neho
