@@ -157,30 +157,33 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
       // Pre istotu ešte raz - ak medzitým (počas loadImage/loadVideo) kontext opäť "zaspal"
       if (audioCtx.state === 'suspended') await audioCtx.resume().catch(() => undefined);
 
-      // Zvuk vo video klipoch
-      for (const v of videoEls) {
-        const srcNode = audioCtx.createMediaElementSource(v.el);
-        srcNode.connect(audioDest);
-      }
-
-      // Samostatná hudobná stopa pridaná v editore – DÔLEŽITÉ: bez tohto sa hudba
-      // pridaná cez "Pridať hudbu" nikdy nedostala do exportovaného súboru.
-      if (opts.music?.src) {
+ // Samostatná hudobná stopa pridaná v editore
+    if (opts.music?.src && audioCtx && audioDest) {
+      try {
         musicEl = new Audio();
         musicEl.crossOrigin = 'anonymous';
-        musicEl.loop = true;
         musicEl.src = opts.music.src;
+
         await new Promise<void>((resolve) => {
           const done = () => resolve();
           musicEl!.oncanplaythrough = done;
-          musicEl!.onerror = done; // nezablokovať export, ak hudba zlyhá
-          setTimeout(done, 4000); // poistka, keby sa udalosť nespustila
+          musicEl!.onerror = done;
+          setTimeout(done, 4000);
         });
+
         const musicSrcNode = audioCtx.createMediaElementSource(musicEl);
         const gainNode = audioCtx.createGain();
         gainNode.gain.value = opts.music.volume ?? 1;
-        musicSrcNode.connect(gainNode).connect(audioDest);
+        musicSrcNode.connect(gainNode);
+        gainNode.connect(audioDest);
+
+        musicEl.currentTime = opts.music.start ?? 0;
+        musicEl.play().catch(() => {});
+      } catch (e) {
+        console.error("Chyba audio exportu:", e);
       }
+    }   
+    
 
       audioDest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
     }
