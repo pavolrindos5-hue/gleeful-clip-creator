@@ -147,14 +147,14 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Canvas nie je dostupný.');
 
-  // 1. Pripojenie AudioContextu pre export
+ // 1. Vytvorenie AudioContextu a zvukov do streamu
   const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
   if (audioCtx.state === 'suspended') {
     await audioCtx.resume();
   }
   const audioDest = audioCtx.createMediaStreamDestination();
 
-  // 2. Dekódovanie a pripojenie hudby z editora
+  // 2. Dekódovanie a pridanie hudby
   if (opts.music?.src) {
     try {
       const response = await fetch(opts.music.src);
@@ -172,25 +172,21 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
 
       sourceNode.start(0, opts.music.start ?? 0);
     } catch (e) {
-      console.error("Chyba načítania hudby pri exporte:", e);
+      console.error("Chyba audio exportu:", e);
     }
   }
 
-  // 3. Spojenie obrazu a zvuku do jedného spoločné streamu
+  // 3. Zostavenie spoločné stopy (Video z Canvasu + Audio z AudioDest)
   const canvasStream = canvas.captureStream(fps);
   const combinedStream = new MediaStream([
     ...canvasStream.getVideoTracks(),
     ...audioDest.stream.getAudioTracks()
   ]);
 
-  // 4. MediaRecorder nahrá obraz aj zvuk naraz
+  // 4. Rekordér dostane spojený stream od začiatku
   const recorder = new MediaRecorder(combinedStream, {
     mimeType: 'video/webm;codecs=vp9,opus'
-  });s
-  const recorder = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 8_000_000 } : undefined);
-  const chunks: BlobPart[] = [];
-  recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
-
+  });
   const stopped = new Promise<void>((resolve) => { recorder.onstop = () => resolve(); });
   recorder.start(200);
 
