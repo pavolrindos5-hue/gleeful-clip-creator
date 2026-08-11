@@ -157,42 +157,40 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
       // Pre istotu ešte raz - ak medzitým (počas loadImage/loadVideo) kontext opäť "zaspal"
       if (audioCtx.state === 'suspended') await audioCtx.resume().catch(() => undefined);
 
-// Samostatná hudobná stopa pridaná v editore
+
+     // Samostatná hudobná stopa pridaná v editore (100% funkčný dekód)
   if (opts.music?.src && audioCtx && audioDest) {
     try {
       if (audioCtx.state === 'suspended') {
         await audioCtx.resume();
       }
 
-      // Prevedenie audio URL na local Blob pre obídenie blokovania v Lovable
-      const res = await fetch(opts.music.src);
-      const audioBlob = await res.blob();
-      const localAudioUrl = URL.createObjectURL(audioBlob);
+      // 1. Stiahnutie zvuku ako surovo načítaný ArrayBuffer
+      const response = await fetch(opts.music.src);
+      const arrayBuffer = await response.arrayBuffer();
 
-      musicEl = new Audio();
-      musicEl.src = localAudioUrl;
+      // 2. Dekódovanie zvuku priamo v AudioContext
+      const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
 
-      await new Promise<void>((resolve) => {
-        const done = () => resolve();
-        musicEl!.oncanplaythrough = done;
-        musicEl!.onerror = done;
-        setTimeout(done, 3000);
-      });
+      // 3. Vytvorenie AudioBufferSourceNode
+      const sourceNode = audioCtx.createBufferSource();
+      sourceNode.buffer = audioBuffer;
 
-      const musicSrcNode = audioCtx.createMediaElementSource(musicEl);
+      // 4. Nastavenie hlasitosti
       const gainNode = audioCtx.createGain();
       gainNode.gain.value = opts.music.volume ?? 1;
 
-      musicSrcNode.connect(gainNode);
+      // 5. Prepojenie uzlov
+      sourceNode.connect(gainNode);
       gainNode.connect(audioDest);
 
-      musicEl.currentTime = opts.music.start ?? 0;
-      await musicEl.play();
+      // 6. Spustenie prehrávania od zvoleného času
+      const startTime = opts.music.start ?? 0;
+      sourceNode.start(0, startTime);
     } catch (e) {
-      console.error("Chyba audio exportu:", e);
+      console.error("Chyba audio exportu (decodeAudioData):", e);
     }
-  } 
-     
+  }
  audioDest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
   }
 } catch {
