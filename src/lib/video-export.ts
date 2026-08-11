@@ -89,6 +89,26 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
   if (!clips.length) throw new Error('Na časovej osi nie sú žiadne médiá.');
   if (typeof MediaRecorder === 'undefined') throw new Error('Tento prehliadač nepodporuje export videa.');
 
+  // DÔLEŽITÉ: AudioContext musí vzniknúť HNEĎ TERAZ, kým ešte platí užívateľské gesto
+  // (klik na tlačidlo Export). Ak by sme ho vytvorili až po await-och nižšie (načítanie
+  // videí/obrázkov), prehliadač by ho vytvoril v stave "suspended" a zvuk by bol ticho
+  // nahraný ako samé nuly – video by sa stiahlo, ale bez počuteľného zvuku.
+  let audioCtx: AudioContext | null = null;
+  let audioDest: MediaStreamAudioDestinationNode | null = null;
+  try {
+    const AC: typeof AudioContext | undefined =
+      window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (AC) {
+      audioCtx = new AC();
+      audioDest = audioCtx.createMediaStreamDestination();
+      // Explicitne "prebudiť" kontext, kým je gesto ešte čerstvé
+      if (audioCtx.state === 'suspended') await audioCtx.resume().catch(() => undefined);
+    }
+  } catch {
+    audioCtx = null;
+    audioDest = null;
+  }
+
   // Rozmery podľa prvého videa/obrázka
   let width = opts.width ?? 0;
   let height = opts.height ?? 0;
@@ -127,20 +147,17 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
 
   const stream = canvas.captureStream(fps);
 
-  // Audio z video klipov (ak sa dá)
-  let audioCtx: AudioContext | null = null;
+  // Audio z video klipov (ak sa dá) – pripojíme na AudioContext vytvorený na začiatku funkcie
   try {
-    const AC: typeof AudioContext | undefined =
-      window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     const videoEls = prepared.filter((p): p is Extract<Prepared, { kind: 'video' }> => p.kind === 'video');
-    if (AC && videoEls.length) {
-      audioCtx = new AC();
-      const dest = audioCtx.createMediaStreamDestination();
+    if (audioCtx && audioDest && videoEls.length) {
+      // Pre istotu ešte raz - ak medzitým (počas loadImage/loadVideo) kontext opäť "zaspal"
+      if (audioCtx.state === 'suspended') await audioCtx.resume().catch(() => undefined);
       for (const v of videoEls) {
         const srcNode = audioCtx.createMediaElementSource(v.el);
-        srcNode.connect(dest);
+        srcNode.connect(audioDest);
       }
-      dest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
+      audioDest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
     }
   } catch {
     // audio je voliteľné – pokračujeme bez neho
