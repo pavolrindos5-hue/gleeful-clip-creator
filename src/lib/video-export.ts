@@ -164,20 +164,25 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
         await audioCtx.resume();
       }
 
+      // Prevedenie audio URL na local Blob pre obídenie blokovania v Lovable
+      const res = await fetch(opts.music.src);
+      const audioBlob = await res.blob();
+      const localAudioUrl = URL.createObjectURL(audioBlob);
+
       musicEl = new Audio();
-      musicEl.crossOrigin = 'anonymous';
-      musicEl.src = opts.music.src;
+      musicEl.src = localAudioUrl;
 
       await new Promise<void>((resolve) => {
         const done = () => resolve();
         musicEl!.oncanplaythrough = done;
         musicEl!.onerror = done;
-        setTimeout(done, 4000);
+        setTimeout(done, 3000);
       });
 
       const musicSrcNode = audioCtx.createMediaElementSource(musicEl);
       const gainNode = audioCtx.createGain();
       gainNode.gain.value = opts.music.volume ?? 1;
+
       musicSrcNode.connect(gainNode);
       gainNode.connect(audioDest);
 
