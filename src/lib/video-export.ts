@@ -157,7 +157,7 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
       // Pre istotu ešte raz - ak medzitým (počas loadImage/loadVideo) kontext opäť "zaspal"
       if (audioCtx.state === 'suspended') await audioCtx.resume().catch(() => undefined);
 
- // Samostatná hudobná stopa pridaná v editore
+// Samostatná hudobná stopa pridaná v editore
   if (opts.music?.src && audioCtx && audioDest) {
     try {
       if (audioCtx.state === 'suspended') {
@@ -191,8 +191,8 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
     } catch (e) {
       console.error("Chyba audio exportu:", e);
     }
-  }
-
+  } 
+     
  audioDest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
   }
 } catch {
