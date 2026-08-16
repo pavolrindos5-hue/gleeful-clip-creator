@@ -28,8 +28,6 @@ export type ExportOptions = {
   aspectRatio?: number | undefined;
   /** vyplniť celý rám namiesto vloženia (orez) */
   cover?: boolean | undefined;
-  /** samostatná hudobná stopa pridaná v editore (nezávislá od zvuku vo videoklipoch) */
-  music?: { src: string; start: number; duration: number; volume?: number } | undefined;
 };
 
 function pickMime(): { mime: string; ext: string } {
@@ -150,49 +148,21 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
   const stream = canvas.captureStream(fps);
 
   // Audio z video klipov (ak sa dá) – pripojíme na AudioContext vytvorený na začiatku funkcie
-  let musicEl: HTMLAudioElement | null = null;
   try {
     const videoEls = prepared.filter((p): p is Extract<Prepared, { kind: 'video' }> => p.kind === 'video');
-    if (audioCtx && audioDest) {
+    if (audioCtx && audioDest && videoEls.length) {
       // Pre istotu ešte raz - ak medzitým (počas loadImage/loadVideo) kontext opäť "zaspal"
       if (audioCtx.state === 'suspended') await audioCtx.resume().catch(() => undefined);
-
- // Samostatná hudobná stopa pridaná v editore
-  if (opts.music?.src && audioCtx && audioDest) {
-    try {
-      if (audioCtx.state === 'suspended') {
-        await audioCtx.resume();
+      for (const v of videoEls) {
+        const srcNode = audioCtx.createMediaElementSource(v.el);
+        srcNode.connect(audioDest);
       }
-
-      musicEl = new Audio();
-      musicEl.crossOrigin = 'anonymous';
-      musicEl.src = opts.music.src;
-
-      await new Promise<void>((resolve) => {
-        const done = () => resolve();
-        musicEl!.oncanplaythrough = done;
-        musicEl!.onerror = done;
-        setTimeout(done, 4000);
-      });
-
-      const musicSrcNode = audioCtx.createMediaElementSource(musicEl);
-      const gainNode = audioCtx.createGain();
-      gainNode.gain.value = opts.music.volume ?? 1;
-      musicSrcNode.connect(gainNode);
-      gainNode.connect(audioDest);
-
-      musicEl.currentTime = opts.music.start ?? 0;
-      await musicEl.play();
-    } catch (e) {
-      console.error("Chyba audio exportu:", e);
+      audioDest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
     }
+  } catch {
+    // audio je voliteľné – pokračujeme bez neho
   }
 
- audioDest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
-  }
-} catch {
-  // audio je volitelne - pokracujeme bez neho
-}
   const { mime, ext } = pickMime();
   const recorder = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 8_000_000 } : undefined);
   const chunks: BlobPart[] = [];
@@ -200,16 +170,6 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
 
   const stopped = new Promise<void>((resolve) => { recorder.onstop = () => resolve(); });
   recorder.start(200);
-
-  // Hudba beží v reálnom čase súbežne s vykresľovaním klipov (rovnako ako klipy samotné),
-  // preto ju naplánujeme cez wall-clock časovače zodpovedajúce jej pozícii na časovej osi.
-  const musicTimers: ReturnType<typeof setTimeout>[] = [];
-  if (musicEl && opts.music) {
-    const startMs = Math.max(0, opts.music.start * 1000);
-    const stopMs = Math.max(startMs, (opts.music.start + opts.music.duration) * 1000);
-    musicTimers.push(setTimeout(() => { musicEl?.play().catch(() => undefined); }, startMs));
-    musicTimers.push(setTimeout(() => { musicEl?.pause(); }, stopMs));
-  }
 
   const totalDuration = prepared.reduce((s, p) => s + p.duration, 0);
   let elapsedBefore = 0;
@@ -398,8 +358,6 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
   recorder.stop();
   await stopped;
   stream.getTracks().forEach((t) => t.stop());
-  musicTimers.forEach((id) => clearTimeout(id));
-  if (musicEl) { musicEl.pause(); musicEl.src = ''; }
   if (audioCtx) await audioCtx.close().catch(() => undefined);
   opts.onProgress?.(100);
 
