@@ -147,49 +147,61 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Canvas nie je dostupný.');
 
-  // Hudba // 1. Pripojenie AudioContextu pre export
-  const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-  if (audioCtx.state === 'suspended') {
-    await audioCtx.resume();
-  }
-  const audioDest = audioCtx.createMediaStreamDestination();
+  const stream = canvas.captureStream(fps);
 
-  // 2. Dekódovanie a pripojenie hudby z editora
-  if (opts.music?.src) {
+  // Audio z video klipov (ak sa dá) – pripojíme na AudioContext vytvorený na začiatku funkcie
+  let musicEl: HTMLAudioElement | null = null;
+  try {
+    const videoEls = prepared.filter((p): p is Extract<Prepared, { kind: 'video' }> => p.kind === 'video');
+    if (audioCtx && audioDest) {
+      // Pre istotu ešte raz - ak medzitým (počas loadImage/loadVideo) kontext opäť "zaspal"
+      if (audioCtx.state === 'suspended') await audioCtx.resume().catch(() => undefined);
+
+ // Samostatná hudobná stopa pridaná v editore
+  if (opts.music?.src && audioCtx && audioDest) {
     try {
-      const response = await fetch(opts.music.src);
-      const arrayBuffer = await response.arrayBuffer();
-      const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+      if (audioCtx.state === 'suspended') {
+        await audioCtx.resume();
+      }
 
-      const sourceNode = audioCtx.createBufferSource();
-      sourceNode.buffer = audioBuffer;
+      musicEl = new Audio();
+      musicEl.crossOrigin = 'anonymous';
+      musicEl.src = opts.music.src;
 
+      await new Promise<void>((resolve) => {
+        const done = () => resolve();
+        musicEl!.oncanplaythrough = done;
+        musicEl!.onerror = done;
+        setTimeout(done, 4000);
+      });
+
+      const musicSrcNode = audioCtx.createMediaElementSource(musicEl);
       const gainNode = audioCtx.createGain();
       gainNode.gain.value = opts.music.volume ?? 1;
-
-      sourceNode.connect(gainNode);
+      musicSrcNode.connect(gainNode);
       gainNode.connect(audioDest);
 
-      sourceNode.start(0, opts.music.start ?? 0);
+      musicEl.currentTime = opts.music.start ?? 0;
+      await musicEl.play();
     } catch (e) {
-      console.error("Chyba načítania hudby pri exporte:", e);
+      console.error("Chyba audio exportu:", e);
     }
   }
 
-  // 3. Spojenie obrazu a zvuku do jedného spoločného streamu
-  const canvasStream = canvas.captureStream(fps);
-  const combinedStream = new MediaStream([
-    ...canvasStream.getVideoTracks(),
-    ...audioDest.stream.getAudioTracks()
-  ]);
-
-  // 4. MediaRecorder nahrá obraz aj zvuk naraz
-  const recorder = new MediaRecorder(combinedStream, {
-    mimeType: 'video/webm;codecs=vp9,opus'
-  });
+ audioDest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
+  }
+} catch {
+  // audio je volitelne - pokracujeme bez neho
+}
+  const { mime, ext } = pickMime();
+  const recorder = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 8_000_000 } : undefined);
+  const chunks: BlobPart[] = [];
+  recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
 
   const stopped = new Promise<void>((resolve) => { recorder.onstop = () => resolve(); });
-  recorder.start(200);beží v reálnom čase súbežne s vykresľovaním klipov (rovnako ako klipy samotné),
+  recorder.start(200);
+
+  // Hudba beží v reálnom čase súbežne s vykresľovaním klipov (rovnako ako klipy samotné),
   // preto ju naplánujeme cez wall-clock časovače zodpovedajúce jej pozícii na časovej osi.
   const musicTimers: ReturnType<typeof setTimeout>[] = [];
   if (musicEl && opts.music) {
