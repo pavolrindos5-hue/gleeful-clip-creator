@@ -960,6 +960,14 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
         aspectRatio: ratio,
         cover: Boolean(ratio) || cropZoom !== 1,
         captions: appliedTools.has("captions") ? [...SUBTITLE_LINES] : undefined,
+        music: musicClips
+          .filter((m) => m.src)
+          .map((m) => ({
+            src: m.src as string,
+            start: m.start ?? 0,
+            duration: m.duration ?? undefined,
+            volume: isMuted ? 0 : volume / 100,
+          })),
         onProgress: setExportPct,
       });
       const base = (videoName || "export").replace(/\.[^/.]+$/, "");
@@ -983,6 +991,9 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
     cropRatio,
     cropZoom,
     playbackRate,
+    musicClips,
+    isMuted,
+    volume,
   ]);
 
   // AI stabilizácia = jemné priblíženie (rovnaké aj v exporte)

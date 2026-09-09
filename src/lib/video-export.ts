@@ -11,8 +11,20 @@ export type ExportClip = {
   speed?: number;
 };
 
+export type ExportMusic = {
+  src: string;
+  /** začiatok na časovej osi v sekundách */
+  start?: number;
+  /** dĺžka na časovej osi v sekundách */
+  duration?: number;
+  /** hlasitosť 0..1 */
+  volume?: number;
+};
+
 export type ExportOptions = {
   clips: ExportClip[];
+  /** hudobné stopy primixované do exportu */
+  music?: ExportMusic[] | undefined;
   filter?: string | undefined; // CSS filter reťazec (jas/kontrast/sýtosť…)
   fps?: number;
   width?: number;
@@ -64,6 +76,18 @@ function loadVideo(src: string): Promise<HTMLVideoElement> {
     v.onloadeddata = () => resolve(v);
     v.onerror = () => reject(new Error("Video sa nepodarilo načítať"));
     v.src = src;
+  });
+}
+
+function loadAudio(src: string): Promise<HTMLAudioElement> {
+  return new Promise((resolve, reject) => {
+    const a = new Audio();
+    a.crossOrigin = "anonymous";
+    a.preload = "auto";
+    a.oncanplaythrough = () => resolve(a);
+    a.onloadeddata = () => resolve(a);
+    a.onerror = () => reject(new Error("Hudbu sa nepodarilo načítať"));
+    a.src = src;
   });
 }
 
@@ -151,23 +175,73 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
 
   const stream = canvas.captureStream(fps);
 
-  // Audio z video klipov (ak sa dá) – pripojíme na AudioContext vytvorený na začiatku funkcie
+  // Hudobné stopy – načítame a primixujeme
+  type PreparedMusic = { el: HTMLAudioElement; start: number; end: number };
+  const music: PreparedMusic[] = [];
+  for (const m of opts.music ?? []) {
+    if (!m.src) continue;
+    try {
+      const el = await loadAudio(m.src);
+      el.volume = Math.max(0, Math.min(1, m.volume ?? 1));
+      const start = m.start ?? 0;
+      music.push({ el, start, end: start + (m.duration ?? el.duration ?? 0) });
+    } catch {
+      /* hudba je voliteľná */
+    }
+  }
+
+  // Audio z video klipov + hudby – pripojíme na AudioContext vytvorený na začiatku funkcie
   try {
     const videoEls = prepared.filter(
       (p): p is Extract<Prepared, { kind: "video" }> => p.kind === "video",
     );
-    if (audioCtx && audioDest && videoEls.length) {
+    if (audioCtx && audioDest && (videoEls.length || music.length)) {
       // Pre istotu ešte raz - ak medzitým (počas loadImage/loadVideo) kontext opäť "zaspal"
       if (audioCtx.state === "suspended") await audioCtx.resume().catch(() => undefined);
       for (const v of videoEls) {
         const srcNode = audioCtx.createMediaElementSource(v.el);
         srcNode.connect(audioDest);
       }
+      for (const m of music) {
+        const gain = audioCtx.createGain();
+        gain.gain.value = Math.max(0, Math.min(1, m.el.volume));
+        const srcNode = audioCtx.createMediaElementSource(m.el);
+        srcNode.connect(gain);
+        gain.connect(audioDest);
+      }
       audioDest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
     }
   } catch {
     // audio je voliteľné – pokračujeme bez neho
   }
+
+  // synchronizácia hudby s globálnym časom exportu
+  const syncMusic = (globalT: number) => {
+    for (const m of music) {
+      const inRange = globalT >= m.start && globalT < m.end;
+      if (inRange) {
+        const local = globalT - m.start;
+        const dur = m.el.duration || 0;
+        const target = dur > 0 ? local % dur : local;
+        if (m.el.paused) {
+          try {
+            m.el.currentTime = target;
+          } catch {
+            /* ignore */
+          }
+          void m.el.play().catch(() => undefined);
+        } else if (Math.abs(m.el.currentTime - target) > 0.35) {
+          try {
+            m.el.currentTime = target;
+          } catch {
+            /* ignore */
+          }
+        }
+      } else if (!m.el.paused) {
+        m.el.pause();
+      }
+    }
+  };
 
   const { mime, ext } = pickMime();
   const recorder = new MediaRecorder(
@@ -361,6 +435,7 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
           drawMedia(item.el, cssFilter, clipOpacity);
         }
         drawCaption(elapsedBefore + t);
+        syncMusic(elapsedBefore + t);
 
         opts.onProgress?.(Math.min(99, Math.round(((elapsedBefore + t) / totalDuration) * 100)));
 
@@ -384,20 +459,28 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
     elapsedBefore += item.duration;
   }
 
+  for (const m of music) m.el.pause();
   recorder.stop();
   await stopped;
   stream.getTracks().forEach((t) => t.stop());
   if (audioCtx) await audioCtx.close().catch(() => undefined);
   opts.onProgress?.(100);
 
-  return { blob: new Blob(chunks, { type: mime || "video/webm" }), ext };
+  // Blob musí mať čistý MIME typ bez "codecs=..." – inak niektoré prehliadače
+  // uložia súbor s koncovkou .tmp namiesto .mp4/.webm
+  const baseMime = ext === "mp4" ? "video/mp4" : "video/webm";
+  return { blob: new Blob(chunks, { type: baseMime }), ext };
 }
 
 export function downloadBlob(blob: Blob, filename: string) {
+  // očistíme názov od znakov, kvôli ktorým prehliadač uloží súbor ako ".tmp"
+  const safe = filename.replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, "_");
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = filename;
+  a.download = safe;
+  a.rel = "noopener";
+  a.target = "_self";
   document.body.appendChild(a);
   a.click();
   a.remove();
