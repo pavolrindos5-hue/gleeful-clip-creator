@@ -79,6 +79,18 @@ function loadVideo(src: string): Promise<HTMLVideoElement> {
   });
 }
 
+function loadAudio(src: string): Promise<HTMLAudioElement> {
+  return new Promise((resolve, reject) => {
+    const a = new Audio();
+    a.crossOrigin = "anonymous";
+    a.preload = "auto";
+    a.oncanplaythrough = () => resolve(a);
+    a.onloadeddata = () => resolve(a);
+    a.onerror = () => reject(new Error("Hudbu sa nepodarilo načítať"));
+    a.src = src;
+  });
+}
+
 function drawCover(
   ctx: CanvasRenderingContext2D,
   media: HTMLVideoElement | HTMLImageElement,
