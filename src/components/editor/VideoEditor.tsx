@@ -991,6 +991,9 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
     cropRatio,
     cropZoom,
     playbackRate,
+    musicClips,
+    isMuted,
+    volume,
   ]);
 
   // AI stabilizácia = jemné priblíženie (rovnaké aj v exporte)
