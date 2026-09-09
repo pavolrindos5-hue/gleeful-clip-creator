@@ -435,6 +435,7 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
           drawMedia(item.el, cssFilter, clipOpacity);
         }
         drawCaption(elapsedBefore + t);
+        syncMusic(elapsedBefore + t);
 
         opts.onProgress?.(Math.min(99, Math.round(((elapsedBefore + t) / totalDuration) * 100)));
 
