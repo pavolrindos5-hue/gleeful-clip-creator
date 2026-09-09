@@ -175,23 +175,73 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
 
   const stream = canvas.captureStream(fps);
 
-  // Audio z video klipov (ak sa dá) – pripojíme na AudioContext vytvorený na začiatku funkcie
+  // Hudobné stopy – načítame a primixujeme
+  type PreparedMusic = { el: HTMLAudioElement; start: number; end: number };
+  const music: PreparedMusic[] = [];
+  for (const m of opts.music ?? []) {
+    if (!m.src) continue;
+    try {
+      const el = await loadAudio(m.src);
+      el.volume = Math.max(0, Math.min(1, m.volume ?? 1));
+      const start = m.start ?? 0;
+      music.push({ el, start, end: start + (m.duration ?? el.duration ?? 0) });
+    } catch {
+      /* hudba je voliteľná */
+    }
+  }
+
+  // Audio z video klipov + hudby – pripojíme na AudioContext vytvorený na začiatku funkcie
   try {
     const videoEls = prepared.filter(
       (p): p is Extract<Prepared, { kind: "video" }> => p.kind === "video",
     );
-    if (audioCtx && audioDest && videoEls.length) {
+    if (audioCtx && audioDest && (videoEls.length || music.length)) {
       // Pre istotu ešte raz - ak medzitým (počas loadImage/loadVideo) kontext opäť "zaspal"
       if (audioCtx.state === "suspended") await audioCtx.resume().catch(() => undefined);
       for (const v of videoEls) {
         const srcNode = audioCtx.createMediaElementSource(v.el);
         srcNode.connect(audioDest);
       }
+      for (const m of music) {
+        const gain = audioCtx.createGain();
+        gain.gain.value = Math.max(0, Math.min(1, m.el.volume));
+        const srcNode = audioCtx.createMediaElementSource(m.el);
+        srcNode.connect(gain);
+        gain.connect(audioDest);
+      }
       audioDest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
     }
   } catch {
     // audio je voliteľné – pokračujeme bez neho
   }
+
+  // synchronizácia hudby s globálnym časom exportu
+  const syncMusic = (globalT: number) => {
+    for (const m of music) {
+      const inRange = globalT >= m.start && globalT < m.end;
+      if (inRange) {
+        const local = globalT - m.start;
+        const dur = m.el.duration || 0;
+        const target = dur > 0 ? local % dur : local;
+        if (m.el.paused) {
+          try {
+            m.el.currentTime = target;
+          } catch {
+            /* ignore */
+          }
+          void m.el.play().catch(() => undefined);
+        } else if (Math.abs(m.el.currentTime - target) > 0.35) {
+          try {
+            m.el.currentTime = target;
+          } catch {
+            /* ignore */
+          }
+        }
+      } else if (!m.el.paused) {
+        m.el.pause();
+      }
+    }
+  };
 
   const { mime, ext } = pickMime();
   const recorder = new MediaRecorder(
