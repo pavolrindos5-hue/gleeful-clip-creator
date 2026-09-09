@@ -459,13 +459,17 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
     elapsedBefore += item.duration;
   }
 
+  for (const m of music) m.el.pause();
   recorder.stop();
   await stopped;
   stream.getTracks().forEach((t) => t.stop());
   if (audioCtx) await audioCtx.close().catch(() => undefined);
   opts.onProgress?.(100);
 
-  return { blob: new Blob(chunks, { type: mime || "video/webm" }), ext };
+  // Blob musí mať čistý MIME typ bez "codecs=..." – inak niektoré prehliadače
+  // uložia súbor s koncovkou .tmp namiesto .mp4/.webm
+  const baseMime = ext === "mp4" ? "video/mp4" : "video/webm";
+  return { blob: new Blob(chunks, { type: baseMime }), ext };
 }
 
 export function downloadBlob(blob: Blob, filename: string) {
