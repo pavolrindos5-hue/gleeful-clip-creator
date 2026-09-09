@@ -11,8 +11,20 @@ export type ExportClip = {
   speed?: number;
 };
 
+export type ExportMusic = {
+  src: string;
+  /** začiatok na časovej osi v sekundách */
+  start?: number;
+  /** dĺžka na časovej osi v sekundách */
+  duration?: number;
+  /** hlasitosť 0..1 */
+  volume?: number;
+};
+
 export type ExportOptions = {
   clips: ExportClip[];
+  /** hudobné stopy primixované do exportu */
+  music?: ExportMusic[] | undefined;
   filter?: string | undefined; // CSS filter reťazec (jas/kontrast/sýtosť…)
   fps?: number;
   width?: number;
