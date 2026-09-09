@@ -473,10 +473,14 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
 }
 
 export function downloadBlob(blob: Blob, filename: string) {
+  // očistíme názov od znakov, kvôli ktorým prehliadač uloží súbor ako ".tmp"
+  const safe = filename.replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, "_");
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = filename;
+  a.download = safe;
+  a.rel = "noopener";
+  a.target = "_self";
   document.body.appendChild(a);
   a.click();
   a.remove();
