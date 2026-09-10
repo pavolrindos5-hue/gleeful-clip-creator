@@ -972,9 +972,10 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
       });
       const base = (videoName || "export").replace(/\.[^/.]+$/, "");
       downloadBlob(blob, `${base}-export.${ext}`);
+      toast.success("Video bolo úspešne exportované.");
     } catch (err) {
       console.error(err);
-      alert(err instanceof Error ? err.message : "Export zlyhal.");
+      toast.error(err instanceof Error ? err.message : "Export zlyhal.");
     } finally {
       setExporting(false);
       setExportPct(0);
