@@ -483,9 +483,7 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
           drawCaption(elapsedBefore + t);
           syncMusic(elapsedBefore + t);
 
-          opts.onProgress?.(
-            Math.min(99, Math.round(((elapsedBefore + t) / totalDuration) * 100)),
-          );
+          opts.onProgress?.(Math.min(99, Math.round(((elapsedBefore + t) / totalDuration) * 100)));
 
           const finished =
             item.kind === "video" ? t >= item.duration || item.el.ended : t >= item.duration;
