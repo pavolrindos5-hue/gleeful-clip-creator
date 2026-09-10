@@ -96,6 +96,7 @@ function loadAudio(src: string): Promise<HTMLAudioElement> {
     };
     a.oncanplaythrough = ready;
     a.onloadeddata = ready;
+    a.onloadedmetadata = ready;
     a.onerror = () => reject(new Error("Hudbu sa nepodarilo načítať"));
     a.src = src;
   });
@@ -123,6 +124,8 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
   if (!clips.length) throw new Error("Na časovej osi nie sú žiadne médiá.");
   if (typeof MediaRecorder === "undefined")
     throw new Error("Tento prehliadač nepodporuje export videa.");
+  if (typeof HTMLCanvasElement.prototype.captureStream !== "function")
+    throw new Error("Tento prehliadač nepodporuje export obrazu. Použi Chrome alebo Edge.");
 
   // DÔLEŽITÉ: AudioContext musí vzniknúť HNEĎ TERAZ, kým ešte platí užívateľské gesto
   // (klik na tlačidlo Export). Ak by sme ho vytvorili až po await-och nižšie (načítanie
@@ -192,7 +195,10 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Canvas nie je dostupný.");
+  if (!ctx) {
+    if (audioCtx) await audioCtx.close().catch(() => undefined);
+    throw new Error("Obraz pre export nie je dostupný.");
+  }
 
   const stream = canvas.captureStream(fps);
 
@@ -206,7 +212,10 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
       const volume = Math.max(0, Math.min(1, m.volume ?? 1));
       el.volume = 1;
       const start = m.start ?? 0;
-      music.push({ el, start, end: start + (m.duration ?? el.duration ?? 0), volume });
+      const sourceDuration = Number.isFinite(el.duration) ? el.duration : 0;
+      const requestedDuration = m.duration ?? sourceDuration;
+      const duration = Number.isFinite(requestedDuration) ? Math.max(0, requestedDuration) : 0;
+      if (duration > 0) music.push({ el, start, end: start + duration, volume });
     } catch {
       /* hudba je voliteľná */
     }
@@ -458,23 +467,25 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
       await new Promise<void>((resolve) => {
         const step = () => {
           const t = (performance.now() - startWall) / 1000;
-        ctx.globalAlpha = 1;
-        ctx.filter = "none";
-        ctx.clearRect(0, 0, width, height);
-        ctx.fillStyle = "#000";
-        ctx.fillRect(0, 0, width, height);
+          ctx.globalAlpha = 1;
+          ctx.filter = "none";
+          ctx.clearRect(0, 0, width, height);
+          ctx.fillStyle = "#000";
+          ctx.fillRect(0, 0, width, height);
 
-        if (transitionId && t < TR_DUR) {
-          const raw = Math.min(1, t / TR_DUR);
-          const p = raw < 0.5 ? 2 * raw * raw : 1 - Math.pow(-2 * raw + 2, 2) / 2; // easeInOut
-          drawTransition(transitionId, p, item.el);
-        } else {
-          drawMedia(item.el, cssFilter, clipOpacity);
-        }
-        drawCaption(elapsedBefore + t);
-        syncMusic(elapsedBefore + t);
+          if (transitionId && t < TR_DUR) {
+            const raw = Math.min(1, t / TR_DUR);
+            const p = raw < 0.5 ? 2 * raw * raw : 1 - Math.pow(-2 * raw + 2, 2) / 2;
+            drawTransition(transitionId, p, item.el);
+          } else {
+            drawMedia(item.el, cssFilter, clipOpacity);
+          }
+          drawCaption(elapsedBefore + t);
+          syncMusic(elapsedBefore + t);
 
-        opts.onProgress?.(Math.min(99, Math.round(((elapsedBefore + t) / totalDuration) * 100)));
+          opts.onProgress?.(
+            Math.min(99, Math.round(((elapsedBefore + t) / totalDuration) * 100)),
+          );
 
           const finished =
             item.kind === "video" ? t >= item.duration || item.el.ended : t >= item.duration;
@@ -498,6 +509,8 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
   } catch (error) {
     if (recorder.state !== "inactive") recorder.stop();
     await stopped;
+    stream.getTracks().forEach((track) => track.stop());
+    if (audioCtx) await audioCtx.close().catch(() => undefined);
     throw error;
   } finally {
     for (const item of prepared) if (item.kind === "video") item.el.pause();
