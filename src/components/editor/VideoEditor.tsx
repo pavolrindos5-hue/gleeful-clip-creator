@@ -145,7 +145,11 @@ const LEFT_TOOLS: { id: LeftTool; icon: React.ElementType; label: string; desc: 
   { id: "effects", icon: SlidersHorizontal, label: "Efekty", desc: "Farby a vizuálne efekty" },
 ];
 
-const WAVEFORM = Array.from({ length: 50 }, () => Math.random() * 70 + 20);
+// Stabilný priebeh zabráni rozdielnemu HTML medzi serverom a prehliadačom.
+const WAVEFORM = Array.from(
+  { length: 50 },
+  (_, index) => 20 + ((index * 37 + index * index * 11) % 71),
+);
 
 const CROP_RATIOS: { id: string; label: string; value: number }[] = [
   { id: "16:9", label: "16:9", value: 16 / 9 },
