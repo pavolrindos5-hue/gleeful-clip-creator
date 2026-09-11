@@ -46,13 +46,13 @@ export type ExportOptions = {
 
 function pickMime(): { mime: string; ext: string } {
   const candidates: { mime: string; ext: string }[] = [
-    // WebM je pri MediaRecorder najspoľahlivejší. Chýbajúcu dĺžku doplníme nižšie.
+    // MP4 má najlepšiu kompatibilitu so systémovými prehrávačmi a korektné časové body.
+    // Použijeme všeobecný typ, aby prehliadač sám vybral podporované MP4 kodeky.
+    { mime: "video/mp4", ext: "mp4" },
+    // WebM ostáva záloha. Chýbajúcu dĺžku doplníme nižšie.
     { mime: "video/webm;codecs=vp9,opus", ext: "webm" },
     { mime: "video/webm;codecs=vp8,opus", ext: "webm" },
     { mime: "video/webm", ext: "webm" },
-    // MP4 ostáva záloha pre prehliadače, ktoré WebM nenahrávajú.
-    { mime: "video/mp4;codecs=avc1.42E01E,mp4a.40.2", ext: "mp4" },
-    { mime: "video/mp4", ext: "mp4" },
   ];
   for (const c of candidates) {
     if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(c.mime)) return c;
