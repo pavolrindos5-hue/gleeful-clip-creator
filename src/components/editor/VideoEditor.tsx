@@ -363,6 +363,27 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
   const timelineScrollRef = useRef<HTMLDivElement>(null);
   const prevClipCountRef = useRef(0);
 
+  // Prvý klip dostane skutočnú dĺžku súboru namiesto predvolenej minúty.
+  useEffect(() => {
+    if (!videoUrl || isImage) return;
+    const probe = document.createElement("video");
+    probe.preload = "metadata";
+    probe.onloadedmetadata = () => {
+      if (!Number.isFinite(probe.duration) || probe.duration <= 0) return;
+      setTimelineClips((previous) =>
+        previous.map((clip, index) =>
+          index === 0 && clip.src === videoUrl ? { ...clip, duration: probe.duration } : clip,
+        ),
+      );
+    };
+    probe.src = videoUrl;
+    return () => {
+      probe.onloadedmetadata = null;
+      probe.removeAttribute("src");
+      probe.load();
+    };
+  }, [videoUrl, isImage]);
+
   const totalDuration = timelineClips.reduce((s, c) => s + c.duration, 0);
   const duration = totalDuration;
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
