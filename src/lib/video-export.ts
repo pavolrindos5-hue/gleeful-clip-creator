@@ -46,12 +46,13 @@ export type ExportOptions = {
 
 function pickMime(): { mime: string; ext: string } {
   const candidates: { mime: string; ext: string }[] = [
-    // MP4 má najlepšiu kompatibilitu so systémovými prehrávačmi a korektné časové body.
-    // Použijeme všeobecný typ, aby prehliadač sám vybral podporované MP4 kodeky.
-    { mime: "video/mp4", ext: "mp4" },
-    // WebM ostáva záloha. Chýbajúcu dĺžku doplníme nižšie.
-    { mime: "video/webm;codecs=vp9,opus", ext: "webm" },
+    // MP4 používame iba vtedy, keď prehliadač výslovne vie vytvoriť kompatibilné
+    // H.264/AAC video. Všeobecné "video/mp4" môže v Chrome vytvoriť MP4 s VP9/Opus,
+    // ktoré systémové prehrávače často ukážu, ale nedokážu prehrať.
+    { mime: 'video/mp4;codecs="avc1.42E01E,mp4a.40.2"', ext: "mp4" },
+    // VP8/Opus je najširšie podporovaná a stabilná kombinácia pre MediaRecorder.
     { mime: "video/webm;codecs=vp8,opus", ext: "webm" },
+    { mime: "video/webm;codecs=vp9,opus", ext: "webm" },
     { mime: "video/webm", ext: "webm" },
   ];
   for (const c of candidates) {
@@ -285,7 +286,8 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
     recorder = new MediaRecorder(stream);
   }
   const actualMime = recorder.mimeType || picked.mime;
-  const ext = actualMime.toLowerCase().includes("mp4") ? "mp4" : "webm";
+  const isCompatibleMp4 = /(?:^|;)\s*codecs?=["']?[^;]*(?:avc1|h264)/i.test(actualMime);
+  const ext = actualMime.toLowerCase().includes("mp4") && isCompatibleMp4 ? "mp4" : "webm";
   const chunks: BlobPart[] = [];
   recorder.ondataavailable = (e) => {
     if (e.data.size > 0) chunks.push(e.data);
