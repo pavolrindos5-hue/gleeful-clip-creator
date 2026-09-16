@@ -45,11 +45,12 @@ export type ExportOptions = {
 };
 
 function pickMime(): { mime: string; ext: string } {
+  // POZOR: MP4 kandidát bol úmyselne odstránený. MediaRecorder v prehliadačoch
+  // zapisuje MP4 vo fragmentovanom formáte a takmer nikdy doň nedoplní správny
+  // "duration" atóm — výsledný súbor sa preto v prehrávačoch ukazuje ako 0:00
+  // (aj keď obraz aj zvuk v ňom reálne sú). Pre WebM nižšie máme funkčnú opravu
+  // dĺžky (fixWebmDuration), preto exportujeme vždy WebM.
   const candidates: { mime: string; ext: string }[] = [
-    // MP4 používame iba vtedy, keď prehliadač výslovne vie vytvoriť kompatibilné
-    // H.264/AAC video. Všeobecné "video/mp4" môže v Chrome vytvoriť MP4 s VP9/Opus,
-    // ktoré systémové prehrávače často ukážu, ale nedokážu prehrať.
-    { mime: 'video/mp4;codecs="avc1.42E01E,mp4a.40.2"', ext: "mp4" },
     // VP8/Opus je najširšie podporovaná a stabilná kombinácia pre MediaRecorder.
     { mime: "video/webm;codecs=vp8,opus", ext: "webm" },
     { mime: "video/webm;codecs=vp9,opus", ext: "webm" },
@@ -128,10 +129,6 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
   if (typeof HTMLCanvasElement.prototype.captureStream !== "function")
     throw new Error("Tento prehliadač nepodporuje export obrazu. Použi Chrome alebo Edge.");
 
-  // DÔLEŽITÉ: AudioContext musí vzniknúť HNEĎ TERAZ, kým ešte platí užívateľské gesto
-  // (klik na tlačidlo Export). Ak by sme ho vytvorili až po await-och nižšie (načítanie
-  // videí/obrázkov), prehliadač by ho vytvoril v stave "suspended" a zvuk by bol ticho
-  // nahraný ako samé nuly – video by sa stiahlo, ale bez počuteľného zvuku.
   let audioCtx: AudioContext | null = null;
   let audioDest: MediaStreamAudioDestinationNode | null = null;
   try {
@@ -141,7 +138,6 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
     if (AC) {
       audioCtx = new AC();
       audioDest = audioCtx.createMediaStreamDestination();
-      // Explicitne "prebudiť" kontext, kým je gesto ešte čerstvé
       if (audioCtx.state === "suspended") await audioCtx.resume().catch(() => undefined);
     }
   } catch {
@@ -149,11 +145,9 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
     audioDest = null;
   }
 
-  // Rozmery podľa prvého videa/obrázka
   let width = opts.width ?? 0;
   let height = opts.height ?? 0;
 
-  // Predpripravíme médiá
   type Prepared =
     | { kind: "video"; el: HTMLVideoElement; duration: number }
     | { kind: "image"; el: HTMLImageElement; duration: number };
@@ -185,10 +179,8 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
     height = h || 720;
   }
   if (opts.aspectRatio) {
-    // orez na cieľový pomer strán (zachovaj plochu podľa šírky)
     height = Math.round(width / opts.aspectRatio);
   }
-  // Párne rozmery kvôli kodekom
   width = Math.max(2, Math.round(width / 2) * 2);
   height = Math.max(2, Math.round(height / 2) * 2);
 
@@ -203,7 +195,6 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
 
   const stream = canvas.captureStream(fps);
 
-  // Hudobné stopy – načítame a primixujeme
   type PreparedMusic = { el: HTMLAudioElement; start: number; end: number; volume: number };
   const music: PreparedMusic[] = [];
   for (const m of opts.music ?? []) {
@@ -222,13 +213,11 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
     }
   }
 
-  // Audio z video klipov + hudby – pripojíme na AudioContext vytvorený na začiatku funkcie
   try {
     const videoEls = prepared.filter(
       (p): p is Extract<Prepared, { kind: "video" }> => p.kind === "video",
     );
     if (audioCtx && audioDest && (videoEls.length || music.length)) {
-      // Pre istotu ešte raz - ak medzitým (počas loadImage/loadVideo) kontext opäť "zaspal"
       if (audioCtx.state === "suspended") await audioCtx.resume().catch(() => undefined);
       for (const v of videoEls) {
         const srcNode = audioCtx.createMediaElementSource(v.el);
@@ -247,7 +236,6 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
     // audio je voliteľné – pokračujeme bez neho
   }
 
-  // synchronizácia hudby s globálnym časom exportu
   const syncMusic = (globalT: number) => {
     for (const m of music) {
       const inRange = globalT >= m.start && globalT < m.end;
@@ -285,9 +273,7 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
   } catch {
     recorder = new MediaRecorder(stream);
   }
-  const actualMime = recorder.mimeType || picked.mime;
-  const isCompatibleMp4 = /(?:^|;)\s*codecs?=["']?[^;]*(?:avc1|h264)/i.test(actualMime);
-  const ext = actualMime.toLowerCase().includes("mp4") && isCompatibleMp4 ? "mp4" : "webm";
+  const ext = "webm";
   const chunks: BlobPart[] = [];
   recorder.ondataavailable = (e) => {
     if (e.data.size > 0) chunks.push(e.data);
@@ -315,7 +301,6 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
   const coverMode = opts.cover ?? false;
   const TR_DUR = 0.7;
 
-  // snímka predchádzajúceho klipu (pre prechody)
   const prevCanvas = document.createElement("canvas");
   prevCanvas.width = width;
   prevCanvas.height = height;
@@ -358,13 +343,11 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
     ctx.restore();
   };
 
-  // aplikuje prechod na kreslenie nového klipu ponad predchádzajúcu snímku
   const drawTransition = (
     id: string,
-    p: number, // 0..1
+    p: number,
     media: HTMLVideoElement | HTMLImageElement,
   ) => {
-    // spodná vrstva = posledná snímka predchádzajúceho klipu
     if (hasPrev) {
       ctx.save();
       ctx.filter = "none";
@@ -517,7 +500,6 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
     for (const m of music) m.el.pause();
   }
 
-  // Vynútime odovzdanie posledných dát ešte pred zastavením rekordéra.
   if (recorder.state === "recording") recorder.requestData();
   await new Promise((resolve) => setTimeout(resolve, 100));
   if (recorder.state !== "inactive") recorder.stop();
@@ -527,25 +509,20 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
   if (recorderError) throw recorderError;
   opts.onProgress?.(100);
 
-  const baseMime = ext === "mp4" ? "video/mp4" : "video/webm";
+  const baseMime = "video/webm";
   const rawBlob = new Blob(chunks, { type: baseMime });
   if (rawBlob.size < 1024) {
     throw new Error("Export nevytvoril platné video. Skús použiť prehliadač Chrome alebo Edge.");
   }
 
-  // MediaRecorder v prehliadačoch často vynechá WebM Duration, preto prehrávač ukáže 0 sekúnd.
-  const blob =
-    ext === "webm"
-      ? await fixWebmDuration(rawBlob, Math.max(1, Math.round(totalDuration * 1000)), {
-          logger: false,
-        })
-      : rawBlob;
+  const blob = await fixWebmDuration(rawBlob, Math.max(1, Math.round(totalDuration * 1000)), {
+    logger: false,
+  });
   if (blob.size < 1024) throw new Error("Výsledné video je prázdne. Export sa neuložil.");
   return { blob, ext };
 }
 
 export function downloadBlob(blob: Blob, filename: string) {
-  // očistíme názov od znakov, kvôli ktorým prehliadač uloží súbor ako ".tmp"
   const safe = filename.replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, "_");
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -557,4 +534,4 @@ export function downloadBlob(blob: Blob, filename: string) {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
-}
+                     }
