@@ -1760,7 +1760,7 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
                 <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity -translate-x-1/2" />
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => seekTo(0)}
@@ -1850,7 +1850,7 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
               transition={{ duration: 0.25, ease: "easeInOut" }}
-              className="absolute right-0 top-0 bottom-0 w-64 z-20 flex flex-col border-l border-primary/10 bg-card overflow-hidden shadow-[-12px_0_40px_-5px_rgba(0,0,0,0.6)]"
+              className="absolute right-0 top-0 bottom-0 w-64 max-w-[85vw] z-20 flex flex-col border-l border-primary/10 bg-card overflow-hidden shadow-[-12px_0_40px_-5px_rgba(0,0,0,0.6)]"
             >
               <div className="flex items-stretch border-b border-primary/10 shrink-0">
                 {panelTabs.map(({ id, label, icon: Icon }) => (
