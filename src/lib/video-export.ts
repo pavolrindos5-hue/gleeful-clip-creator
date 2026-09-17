@@ -36,8 +36,10 @@ export type ExportOptions = {
   transitions?: Record<number, string> | undefined;
   /** priblíženie (AI stabilizácia) */
   zoom?: number | undefined;
-  /** titulky vypálené do videa */
+  /** titulky vypálené do videa (staré, rotujúce po 3s – zachované pre spätnú kompatibilitu) */
   captions?: string[] | undefined;
+  /** reálne AI titulky s presným časovaním (z transcribeClip) */
+  captionSegments?: { text: string; start: number; end: number }[] | undefined;
   /** cieľový pomer strán (orez) */
   aspectRatio?: number | undefined;
   /** vyplniť celý rám namiesto vloženia (orez) */
@@ -45,13 +47,7 @@ export type ExportOptions = {
 };
 
 function pickMime(): { mime: string; ext: string } {
-  // POZOR: MP4 kandidát bol úmyselne odstránený. MediaRecorder v prehliadačoch
-  // zapisuje MP4 vo fragmentovanom formáte a takmer nikdy doň nedoplní správny
-  // "duration" atóm — výsledný súbor sa preto v prehrávačoch ukazuje ako 0:00
-  // (aj keď obraz aj zvuk v ňom reálne sú). Pre WebM nižšie máme funkčnú opravu
-  // dĺžky (fixWebmDuration), preto exportujeme vždy WebM.
   const candidates: { mime: string; ext: string }[] = [
-    // VP8/Opus je najširšie podporovaná a stabilná kombinácia pre MediaRecorder.
     { mime: "video/webm;codecs=vp8,opus", ext: "webm" },
     { mime: "video/webm;codecs=vp9,opus", ext: "webm" },
     { mime: "video/webm", ext: "webm" },
@@ -298,6 +294,7 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
   const transitions = opts.transitions ?? {};
   const zoom = opts.zoom ?? 1;
   const captions = opts.captions ?? [];
+  const captionSegments = opts.captionSegments ?? [];
   const coverMode = opts.cover ?? false;
   const TR_DUR = 0.7;
 
@@ -321,8 +318,12 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
   };
 
   const drawCaption = (globalT: number) => {
-    if (!captions.length) return;
-    const line = captions[Math.floor(globalT / 3) % captions.length];
+    let line: string | undefined;
+    if (captionSegments.length) {
+      line = captionSegments.find((s) => globalT >= s.start && globalT < s.end)?.text;
+    } else if (captions.length) {
+      line = captions[Math.floor(globalT / 3) % captions.length];
+    }
     if (!line) return;
     ctx.save();
     ctx.filter = "none";
@@ -509,7 +510,7 @@ export async function exportTimeline(opts: ExportOptions): Promise<{ blob: Blob;
   if (recorderError) throw recorderError;
   opts.onProgress?.(100);
 
-  const baseMime = "video/webm";
+  const baseMime = ext === "mp4" ? "video/mp4" : "video/webm";
   const rawBlob = new Blob(chunks, { type: baseMime });
   if (rawBlob.size < 1024) {
     throw new Error("Export nevytvoril platné video. Skús použiť prehliadač Chrome alebo Edge.");
@@ -534,4 +535,4 @@ export function downloadBlob(blob: Blob, filename: string) {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
-                     }
+}
