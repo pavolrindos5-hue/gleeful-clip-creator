@@ -321,6 +321,11 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
   const [selectedClipId, setSelectedClipId] = useState<number | null>(null);
   const [selectedMusicId, setSelectedMusicId] = useState<number | null>(null);
   const [musicClips, setMusicClips] = useState<MusicClip[]>([]);
+  const [captionSegments, setCaptionSegments] = useState<
+    { text: string; start: number; end: number }[]
+  >([]);
+  const [transcribing, setTranscribing] = useState(false);
+  const [transcribePct, setTranscribePct] = useState(0);
   const [dragState, setDragState] = useState<{
     clipId: number;
     startX: number;
@@ -984,7 +989,8 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
         zoom: (appliedTools.has("stabilize") ? 1.06 : 1) * cropZoom,
         aspectRatio: ratio,
         cover: Boolean(ratio) || cropZoom !== 1,
-        captions: appliedTools.has("captions") ? [...SUBTITLE_LINES] : undefined,
+        captionSegments:
+          appliedTools.has("captions") && captionSegments.length ? captionSegments : undefined,
         music: musicClips
           .filter((m) => m.src)
           .map((m) => ({
@@ -1020,6 +1026,7 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
     musicClips,
     isMuted,
     volume,
+    captionSegments,
   ]);
 
   // AI stabilizácia = jemné priblíženie (rovnaké aj v exporte)
@@ -1603,7 +1610,11 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
                   className="absolute bottom-6 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-black/70 backdrop-blur-sm rounded-xl border border-white/10 max-w-[85%]"
                 >
                   <p className="text-white text-sm sm:text-base font-semibold text-center drop-shadow-md">
-                    {SUBTITLE_LINES[subtitleIdx]}
+                    {captionSegments.length
+                      ? captionSegments.find(
+                          (s) => currentTime >= s.start && currentTime < s.end,
+                        )?.text ?? ""
+                      : SUBTITLE_LINES[subtitleIdx]}
                   </p>
                 </motion.div>
               )}
@@ -2040,15 +2051,48 @@ export default function VideoEditor({ videoUrl, videoName, isImage = false }: Vi
                       exit={{ opacity: 0, x: -10 }}
                       className="space-y-3"
                     >
-                      <p className="text-xs text-muted-foreground">Pridaj titulky a texty</p>
+                      <p className="text-xs text-muted-foreground">
+                        AI rozpozná reč v prvom videoklipe a vygeneruje reálne titulky
+                        (prvé spustenie stiahne model, ~50MB, potom je to offline).
+                      </p>
                       <button
-                        onClick={() => {
-                          setAppliedTools((s) => new Set(s).add("captions"));
-                          setSubtitleIdx(0);
+                        disabled={transcribing}
+                        onClick={async () => {
+                          const clip = timelineClips.find((c) => c.src && c.type !== "image");
+                          if (!clip?.src) {
+                            alert("Najprv nahraj video s hovoreným slovom.");
+                            return;
+                          }
+                          setTranscribing(true);
+                          setTranscribePct(0);
+                          try {
+                            const { transcribeClip } = await import("@/lib/ai-captions");
+                            const segments = await transcribeClip(clip.src, {
+                              language: "slovak",
+                              onProgress: setTranscribePct,
+                            });
+                            if (!segments.length) {
+                              toast.error("Nepodarilo sa rozpoznať žiadnu reč v tomto klipe.");
+                              return;
+                            }
+                            setCaptionSegments(segments);
+                            setAppliedTools((s) => new Set(s).add("captions"));
+                            setSubtitleIdx(0);
+                            toast.success(`Vygenerovaných ${segments.length} titulkov.`);
+                          } catch (err) {
+                            console.error(err);
+                            toast.error("Generovanie titulkov zlyhalo.");
+                          } finally {
+                            setTranscribing(false);
+                            setTranscribePct(0);
+                          }
                         }}
-                        className="w-full py-2 rounded-xl bg-primary/10 border border-primary/20 text-primary text-xs font-semibold hover:bg-primary/20 transition-all flex items-center justify-center gap-2"
+                        className="w-full py-2 rounded-xl bg-primary/10 border border-primary/20 text-primary text-xs font-semibold hover:bg-primary/20 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
                       >
-                        <AlignLeft className="w-3.5 h-3.5" /> Pridať titulky na video
+                        <AlignLeft className="w-3.5 h-3.5" />
+                        {transcribing
+                          ? `Rozpoznávam reč… ${transcribePct}%`
+                          : "Vygenerovať AI titulky"}
                       </button>
                     </motion.div>
                   )}
